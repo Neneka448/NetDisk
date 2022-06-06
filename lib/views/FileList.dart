@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
+import '../GlobalVariables.dart' show baseURl;
 
 
 class File {
@@ -113,7 +113,7 @@ class _FileListState extends State<FileList> {
   late FileListTreeVisitor visitor=FileListTreeVisitor(fileTree);
   void getFileListWhenInit() async {
     final res = await http
-        .get(Uri.parse("http://172.27.120.228:4523/mock/816372/disk/list"));
+        .get(Uri.parse(baseURl+"/disk/list"));
     List<dynamic> t = jsonDecode(res.body);
     var files=t.map((ele) => File.fromJson(ele)).toList();
     setState(() {
@@ -154,12 +154,16 @@ class _FileListState extends State<FileList> {
         fileSize /= 8 * 1024 * 1024 * 1024;
       }
       return OutlinedButton(
+
+          style: OutlinedButton.styleFrom(
+            side:BorderSide.none,
+          ),
           onPressed: () {
             if(e.fileType=="folder"){
               setState(() {
                 visitor=visitor.moveTo(e.fileID);
                 if(!visitor.hasChild()){
-                  http.get(Uri.parse("http://172.27.120.228:4523/mock/816372/disk/list/details")).then((res){
+                  http.get(Uri.parse(baseURl+"/disk/list/details")).then((res){
                     List<dynamic> t=jsonDecode(res.body);
                     var files=t.map((ele) => File.fromJson(ele)).toList();
                     setState(() {
@@ -168,37 +172,60 @@ class _FileListState extends State<FileList> {
                   });
                 }
               });
+            }else if(e.fileType=="file"){
+              Navigator.pushNamed(context, "/file",arguments: e);
             }
           },
-          child: Column(
+          child: Flex(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            direction: Axis.horizontal,
             children: [
-              Flex(
-                direction: Axis.horizontal,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(e.fileName),
-                  Text(e.fileType == "file"
-                      ? "${fileSize.toStringAsFixed(2)}$fileSizeExt"
-                      : ""),
+              Container(
+                margin:const EdgeInsets.only(right: 10),
+                child: Icon(e.fileType=="file"?Icons.insert_drive_file_sharp:Icons.folder),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children:[
+                  Text(
+                    e.fileName,
+                    style: const TextStyle(
+                    color: Colors.black,
+                      fontSize: 16
+                  )),
+                  Row(
+                    children: [
+                      Text(e.date,style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 12
+                      ),),
+                      Container(
+                        margin: const EdgeInsets.only(left: 10),
+                        child: Text(e.fileType == "file"
+                            ? "${fileSize.toStringAsFixed(2)}$fileSizeExt"
+                            : "",style: const TextStyle(
+                            color: Colors.grey,
+                          fontSize: 12
+                        )),
+                      )
+                    ],
+                  )
                 ],
               ),
-              Flex(
-                direction: Axis.horizontal,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [Text(e.fileType), Text(e.date)],
-              )
+
+
             ],
           ));
     }).toList();
     
     return Container(
       child:itemWidget.isEmpty?const Text("no content"):ListView.builder(
-        padding: const EdgeInsets.all(10),
         shrinkWrap: true,
         itemCount: itemWidget.length,
         itemBuilder: (BuildContext context, int index) {
           return SizedBox(
-              width: 40,
+              height: 60,
               child:itemWidget[index]
           );
         },
