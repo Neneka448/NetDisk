@@ -1,5 +1,7 @@
 
 
+import 'package:flutter/cupertino.dart';
+
 class RawResponse<T>{
   final String status;
   final String desc;
@@ -61,4 +63,8 @@ String getFormatTime(DateTime time,{bool needYear=false}){
   }else{
     return "${time.month < 10 ? '0${time.month}' : time.month}-${time.day < 10 ? '0${time.day}' : time.day} ${time.hour < 10 ? '0${time.hour}' : time.hour}:${time.minute < 10 ? '0${time.minute}' : time.minute}";
   }
+}
+
+class NavigatorKey{
+  static final key=GlobalKey<NavigatorState>();
 }

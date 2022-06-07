@@ -4,6 +4,7 @@ import 'package:netdisk/views/FavoriteList.dart';
 import 'package:netdisk/views/RecycleList.dart';
 import 'package:netdisk/views/SharePage.dart';
 import 'package:netdisk/views/User.dart';
+import '../GlobalClass.dart'show NavigatorKey;
 import 'FileDetail.dart';
 import 'FileList.dart';
 import 'package:get/get.dart';
@@ -16,6 +17,7 @@ class DiskRootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final Store store=Get.put(Store());
     return GetMaterialApp(
+      navigatorKey: NavigatorKey.key,
       title: 'Diana Disk',
       routes: {
         '/': (BuildContext context) => const DiskApp(),
@@ -26,7 +28,7 @@ class DiskRootApp extends StatelessWidget {
       onGenerateRoute: (settings) {
         if (settings.name == '/file') {
           return MaterialPageRoute<File>(builder: (context) {
-            return FileDetail(file: settings.arguments as File);
+            return FileDetail(argv:settings.arguments as dynamic);
           });
         } else {
           return null;
@@ -46,12 +48,15 @@ class DiskApp extends StatefulWidget {
 
 class _DiskAppState extends State<DiskApp> {
   late Function fileListGoBackCallBack;
+  late Function shouldFileBottomSheetClose;
   int _currentIndex = 0;
 
   void onBack(Function fn) {
     fileListGoBackCallBack = fn;
   }
-
+  void onChangeNavi(Function fn){
+    shouldFileBottomSheetClose=fn;
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,6 +102,7 @@ class _DiskAppState extends State<DiskApp> {
                 Expanded(
                     child: FileList(
                   backToParentCallback: onBack,
+                      onChangeNavi: onChangeNavi,
                 )),
               ],
             )
@@ -120,9 +126,12 @@ class _DiskAppState extends State<DiskApp> {
         ],
         currentIndex: _currentIndex,
         onTap: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          if(index!=_currentIndex){
+            shouldFileBottomSheetClose();
+            setState(() {
+              _currentIndex = index;
+            });
+          }
         },
       ),
     );
