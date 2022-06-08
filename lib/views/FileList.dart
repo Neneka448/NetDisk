@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../GlobalVariables.dart' show baseURl;
 import '../GlobalClass.dart' show NavigatorKey, getFormatTime;
+import 'package:share_plus/share_plus.dart';
 
 class File {
   final String fileName;
@@ -29,8 +30,8 @@ class File {
         date: json['date'],
         fileType: json['file_type'],
         fileID: json['file_id'],
-        lastModifiedTime: DateTime.fromMillisecondsSinceEpoch(int.parse(json['last_modified_time']))
-    );
+        lastModifiedTime:
+            DateTime.fromMillisecondsSinceEpoch(int.parse(json['last_modified_time'])));
   }
 }
 
@@ -100,15 +101,17 @@ class FileListTreeVisitor {
     }
     return this;
   }
-  String getFilePathToRoot(String fileID){
-    var s=<String>[];
-    var now=FileListTreeVisitor(visitee.getChild(fileID));
-    while(!now.isRootFile()){
+
+  String getFilePathToRoot(String fileID) {
+    var s = <String>[];
+    var now = FileListTreeVisitor(visitee.getChild(fileID));
+    while (!now.isRootFile()) {
       s.add(now.visitee.file.fileName);
-      now=now.returnToParent();
+      now = now.returnToParent();
     }
     return s.reversed.join("<");
   }
+
   File getFile() {
     return visitee.file;
   }
@@ -137,7 +140,8 @@ class FileListTreeVisitor {
 class FileList extends StatefulWidget {
   final Function backToParentCallback;
   final Function onChangeNavi;
-  const FileList({Key? key, required this.backToParentCallback,required this.onChangeNavi})
+
+  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi})
       : super(key: key);
 
   @override
@@ -147,14 +151,16 @@ class FileList extends StatefulWidget {
 class _FileListState extends State<FileList> {
   bool chooseMode = false;
   var chosenMap = <String, bool>{};
-  List<File>files=[];
+  var shareFileValidDays = 30;
+  var shareFilePsw = '';
+  List<File> files = [];
   FileListTree fileTree = FileListTree(File(
       fileName: "_ROOT",
       fileID: "-1",
       fileType: "RootFile",
       fileSize: "0",
       date: "-1",
-  lastModifiedTime: DateTime.fromMillisecondsSinceEpoch(0)));
+      lastModifiedTime: DateTime.fromMillisecondsSinceEpoch(0)));
   late FileListTreeVisitor visitor = FileListTreeVisitor(fileTree);
 
   void getFileListWhenInit() async {
@@ -165,22 +171,25 @@ class _FileListState extends State<FileList> {
       visitor = visitor.buildChildren(files);
     });
   }
+
   @override
   void initState() {
     super.initState();
     getFileListWhenInit();
-    widget.onChangeNavi((){
-      if(chooseMode==true){
+    widget.onChangeNavi(() {
+      if (chooseMode == true) {
         Navigator.pop(context);
       }
     });
   }
+
   @override
   void dispose() {
     // TODO: implement dispose
     super.dispose();
-    widget.onChangeNavi((){});
+    widget.onChangeNavi(() {});
   }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -224,92 +233,239 @@ class _FileListState extends State<FileList> {
               chooseMode = true;
               chosenMap[e.fileID] = true;
             });
+            //TODO: BottomSheet
             showBottomSheet(
-              enableDrag: false,
-              backgroundColor: Colors.blue,
+                enableDrag: false,
+                backgroundColor: Colors.blue,
                 context: context,
                 builder: (BuildContext context) {
                   return SizedBox(
                     height: 60,
                     width: double.infinity,
                     child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    OutlinedButton(
-                        style:
-                            OutlinedButton.styleFrom(side: BorderSide.none),
-                        onPressed: () {},
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.file_download_outlined,
-                              color: Colors.white,
-                            ),
-                            Text(
-                              "下载",
-                              style: TextStyle(color: Colors.white),
-                            )
-                          ],
-                        )),
-                    OutlinedButton(
-                        style:
-                            OutlinedButton.styleFrom(side: BorderSide.none),
-                        onPressed: () {},
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.share, color: Colors.white),
-                            Text("分享",
-                                style: TextStyle(color: Colors.white)),
-                          ],
-                        )),
-                    OutlinedButton(
-                        style:
-                            OutlinedButton.styleFrom(side: BorderSide.none),
-                        onPressed: () {},
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                            ),
-                            Text("删除",
-                                style: TextStyle(color: Colors.white)),
-                          ],
-                        )),
-                    OutlinedButton(
-                        style:
-                            OutlinedButton.styleFrom(side: BorderSide.none),
-                        onPressed: () {},
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.star_outlined,
-                              color: Colors.white,
-                            ),
-                            Text("收藏",
-                                style: TextStyle(color: Colors.white)),
-                          ],
-                        )),
-                    OutlinedButton(
-                        style:
-                            OutlinedButton.styleFrom(side: BorderSide.none),
-                        onPressed: () {},
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.more_horiz,
-                              color: Colors.white,
-                            ),
-                            Text("更多",
-                                style: TextStyle(color: Colors.white))
-                          ],
-                        ))
-                  ],
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            onPressed: () {},
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.file_download_outlined,
+                                  color: Colors.white,
+                                ),
+                                Text(
+                                  "下载",
+                                  style: TextStyle(color: Colors.white),
+                                )
+                              ],
+                            )),
+                        OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            onPressed: () {
+                              //TODO: shareDialog
+                              showDialog(
+                                builder: (BuildContext context) {
+                                  return Dialog(
+                                    child: Container(
+                                      width: 200,
+                                      height: 220,
+                                      padding:
+                                          EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 16),
+                                      decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(10)),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: double.infinity,
+                                            child: Text(
+                                              "分享",
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                          Divider(
+                                            height: 16,
+                                          ),
+                                          Row(
+                                            children: [
+                                              Column(
+                                                children: [
+                                                  Container(
+                                                    width: 50,
+                                                    height: 50,
+                                                    decoration: BoxDecoration(
+                                                        color: Color.fromARGB(255, 240, 240, 240),
+                                                        shape: BoxShape.circle),
+                                                    child: IconButton(
+                                                      icon: Icon(Icons.link),
+                                                      onPressed: () {
+                                                        print(1);
+                                                      },
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    "复制链接",
+                                                    style: TextStyle(
+                                                        fontSize: 14, color: Colors.black),
+                                                  )
+                                                ],
+                                              ),
+                                              Divider(
+                                                color: Colors.transparent,
+                                                indent: 10,
+                                              ),
+                                              Column(
+                                                children: [
+                                                  Container(
+                                                    width: 50,
+                                                    height: 50,
+                                                    decoration: BoxDecoration(
+                                                        color: Color.fromARGB(255, 240, 240, 240),
+                                                        shape: BoxShape.circle),
+                                                    child: IconButton(
+                                                      icon: Icon(Icons.share),
+                                                      onPressed: () {
+                                                        Share.share("关注嘉然顿顿解馋");
+                                                      },
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    "其他应用",
+                                                    style: TextStyle(
+                                                        fontSize: 14, color: Colors.black),
+                                                  )
+                                                ],
+                                              )
+                                            ],
+                                          ),
+                                          OutlinedButton(
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide.none,
+                                                backgroundColor: Color.fromARGB(255, 240, 240, 240),
+                                              ),
+                                              onPressed: () {
+                                                showModalBottomSheet(
+                                                    context: context,
+                                                    backgroundColor: Colors.transparent,
+                                                    builder: (BuildContext context) {
+                                                      return Container(
+
+                                                        child: ClipRRect(
+                                                          borderRadius: BorderRadius.only(
+                                                              topLeft: Radius.circular(16),
+                                                              topRight: Radius.circular(16)),
+                                                          child: Container(
+                                                            height: 200,
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.white,
+                                                            ),
+                                                            child: Text("11111111111111"),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    });
+                                              },
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  RichText(
+                                                      text: TextSpan(children: [
+                                                    TextSpan(
+                                                        text: "$shareFileValidDays ",
+                                                        style: TextStyle(
+                                                            color: Colors.blue,
+                                                            fontWeight: FontWeight.bold)),
+                                                    TextSpan(
+                                                        text: "天内有效",
+                                                        style: TextStyle(color: Colors.black))
+                                                  ])),
+                                                  Text(
+                                                    ">",
+                                                    style: TextStyle(color: Colors.grey),
+                                                  )
+                                                ],
+                                              )),
+                                          ConstrainedBox(
+                                            constraints: BoxConstraints(maxHeight: 40),
+                                            child: TextField(
+                                              decoration: const InputDecoration(
+                                                  hintText: "设置提取码(不设置时自动生成)",
+                                                  fillColor: Color.fromARGB(255, 240, 240, 240),
+                                                  filled: true,
+                                                  focusColor: Color.fromARGB(255, 248, 248, 248),
+                                                  border: OutlineInputBorder(
+                                                      borderSide: BorderSide.none),
+                                                  contentPadding:
+                                                      EdgeInsets.only(left: 16, top: 6, bottom: 6)),
+                                              onChanged: (v) => setState(() {
+                                                shareFilePsw = v;
+                                              }),
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                                context: context,
+                                barrierDismissible: true,
+                                barrierLabel: "111",
+                              );
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.share, color: Colors.white),
+                                Text("分享", style: TextStyle(color: Colors.white)),
+                              ],
+                            )),
+                        OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            onPressed: () {},
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
+                                Text("删除", style: TextStyle(color: Colors.white)),
+                              ],
+                            )),
+                        OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            onPressed: () {},
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.star_outlined,
+                                  color: Colors.white,
+                                ),
+                                Text("收藏", style: TextStyle(color: Colors.white)),
+                              ],
+                            )),
+                        OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            onPressed: () {},
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.more_horiz,
+                                  color: Colors.white,
+                                ),
+                                Text("更多", style: TextStyle(color: Colors.white))
+                              ],
+                            ))
+                      ],
                     ),
                   );
                 });
@@ -330,9 +486,7 @@ class _FileListState extends State<FileList> {
                 setState(() {
                   visitor = visitor.moveTo(e.fileID);
                   if (!visitor.hasChild()) {
-                    http
-                        .get(Uri.parse(baseURl + "/disk/list/details"))
-                        .then((res) {
+                    http.get(Uri.parse(baseURl + "/disk/list/details")).then((res) {
                       List<dynamic> t = jsonDecode(res.body);
                       var files = t.map((ele) => File.fromJson(ele)).toList();
                       setState(() {
@@ -342,7 +496,8 @@ class _FileListState extends State<FileList> {
                   }
                 });
               } else if (e.fileType == "file") {
-                Navigator.pushNamed(context, "/file", arguments: {'file':e,'location':visitor.getFilePathToRoot(e.fileID)});
+                Navigator.pushNamed(context, "/file",
+                    arguments: {'file': e, 'location': visitor.getFilePathToRoot(e.fileID)});
               }
             }
           },
@@ -356,23 +511,20 @@ class _FileListState extends State<FileList> {
                 children: [
                   Container(
                     margin: const EdgeInsets.only(right: 10),
-                    child: Icon(e.fileType == "file"
-                        ? Icons.insert_drive_file_sharp
-                        : Icons.folder),
+                    child:
+                        Icon(e.fileType == "file" ? Icons.insert_drive_file_sharp : Icons.folder),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(e.fileName,
-                          style: const TextStyle(
-                              color: Colors.black, fontSize: 16)),
+                      Text(e.fileName, style: const TextStyle(color: Colors.black, fontSize: 16)),
                       Row(
                         children: [
                           Text(
-                            getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)),needYear: true),
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12),
+                            getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)),
+                                needYear: true),
+                            style: const TextStyle(color: Colors.grey, fontSize: 12),
                           ),
                           Container(
                             margin: const EdgeInsets.only(left: 10),
@@ -380,8 +532,7 @@ class _FileListState extends State<FileList> {
                                 e.fileType == "file"
                                     ? "${fileSize.toStringAsFixed(2)}$fileSizeExt"
                                     : "",
-                                style: const TextStyle(
-                                    color: Colors.grey, fontSize: 12)),
+                                style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           )
                         ],
                       )

@@ -16,33 +16,32 @@ class UserPage extends StatefulWidget {
 
 class _UserPageState extends State<UserPage> {
   bool isLogin = false;
+
   void setLogin(bool loginState) {
     setState(() {
       isLogin = loginState;
     });
   }
+
   final Store store = Get.find();
+
   @override
   void initState() {
     super.initState();
-    if(store.loginState.value==false){
-      SharedPreferences.getInstance().then((preference){
-        var token=preference.getString('token');
-        if(token != null){
-          http.post(Uri.parse(baseURl + "/auth/check"),headers: {
-            'Authorization':'Basic $token'
-          }).then((response){
-            var rawRes=jsonDecode(response.body);
-            var res=RawResponse(
-                status: rawRes['status'],
-                desc: rawRes['desc'],
-                data: null
-            );
-            if(res.status=='ok'){
-              store.token.value=token;
+    if (store.loginState.value == false) {
+      SharedPreferences.getInstance().then((preference) {
+        var token = preference.getString('token');
+        if (token != null) {
+          http.post(Uri.parse(baseURl + "/auth/check"),
+              headers: {'Authorization': 'Basic $token'}).then((response) {
+            var rawRes = jsonDecode(response.body);
+            var res = RawResponse(
+                status: rawRes['status'], desc: rawRes['desc'], data: null);
+            if (res.status == 'ok') {
+              store.token.value = token;
               store.changeLoginState(true);
               _initUser();
-            }else{
+            } else {
               preference.remove('token');
             }
           });
@@ -50,19 +49,23 @@ class _UserPageState extends State<UserPage> {
       });
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      child: Obx(()=>store.loginState.value
+      child: Obx(() => store.loginState.value
           ? const UserPageHasLogin()
-          : UserPageNotLogin(setLogin: setLogin,initUser: _initUser,)),
+          : UserPageNotLogin(
+              setLogin: setLogin,
+              initUser: _initUser,
+            )),
     );
   }
-  void _initUser(){
-    http.get(Uri.parse(baseURl + "/user/info"),headers: {
-      'Authorization':'Basic ${store.token.value}'
-    }).then((res){
-      dynamic rawData=jsonDecode(res.body)['data'];
+
+  void _initUser() {
+    http.get(Uri.parse(baseURl + "/user/info"),
+        headers: {'Authorization': 'Basic ${store.token.value}'}).then((res) {
+      dynamic rawData = jsonDecode(res.body)['data'];
       store.setUser(User.fromJson(rawData));
     });
   }
@@ -71,7 +74,10 @@ class _UserPageState extends State<UserPage> {
 class UserPageNotLogin extends StatefulWidget {
   final Function setLogin;
   final Function initUser;
-  const UserPageNotLogin({Key? key, required this.setLogin,required this.initUser}) : super(key: key);
+
+  const UserPageNotLogin(
+      {Key? key, required this.setLogin, required this.initUser})
+      : super(key: key);
 
   @override
   State<UserPageNotLogin> createState() => _UserPageNotLoginState();
@@ -81,6 +87,7 @@ class _UserPageNotLoginState extends State<UserPageNotLogin> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   String _account = '';
   String _psw = '';
+
   @override
   Widget build(BuildContext context) {
     final Store store = Get.find();
@@ -114,10 +121,11 @@ class _UserPageNotLoginState extends State<UserPageNotLogin> {
                     data: Token.fromJson(rawObj['data']));
                 if (rawRes.status == 'ok') {
                   widget.setLogin(true);
-                  store.token.value=rawRes.data.token;
+                  store.token.value = rawRes.data.token;
                   store.changeLoginState(true);
                   widget.initUser();
-                  SharedPreferences.getInstance().then((value) => value.setString('token', rawRes.data.token));
+                  SharedPreferences.getInstance().then(
+                      (value) => value.setString('token', rawRes.data.token));
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(rawRes.data.token),
                   ));
@@ -140,7 +148,7 @@ class UserPageHasLogin extends StatefulWidget {
 class _UserPageHasLoginState extends State<UserPageHasLogin> {
   @override
   Widget build(BuildContext context) {
-    final Store store=Get.find();
+    final Store store = Get.find();
     return Flex(
       direction: Axis.vertical,
       mainAxisAlignment: MainAxisAlignment.start,
@@ -153,10 +161,15 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
               child: Icon(Icons.people),
             ),
             Container(
-                child: Obx(()=>Text(store.user.value.name, style: TextStyle(fontSize: 20))),
+                child: Obx(() => Text(store.user.value.name,
+                    style: TextStyle(fontSize: 20))),
                 margin: const EdgeInsets.fromLTRB(10, 0, 0, 0)),
           ],
         )),
+        Divider(
+          color: Colors.transparent,
+          height: 16,
+        ),
         Container(
           child: Column(
             children: [
@@ -172,24 +185,26 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                     padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
-                      child: Obx(()=>LinearProgressIndicator(
-                        value: store.user.value.usedSpace/store.user.value.maxSpace,
-                        minHeight: 14,
-                        valueColor:const AlwaysStoppedAnimation(Colors.red),
-                        backgroundColor: Colors.blue,
-                      )),
+                      child: Obx(() => LinearProgressIndicator(
+                            value: store.user.value.usedSpace /
+                                store.user.value.maxSpace,
+                            minHeight: 14,
+                            valueColor:
+                                const AlwaysStoppedAnimation(Colors.red),
+                            backgroundColor: Colors.blue,
+                          )),
                     )),
               ),
-              Obx(()=>Text(
-                "${store.user.value.usedSpace}/${store.user.value.maxSpace}GB",
-                textAlign: TextAlign.right,
-                style: TextStyle(color: Colors.grey),
-              ))
+              Obx(() => Text(
+                    "${store.user.value.usedSpace}/${store.user.value.maxSpace}GB",
+                    textAlign: TextAlign.right,
+                    style: TextStyle(color: Colors.grey),
+                  ))
             ],
           ),
         ),
         Padding(
-            padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
+            padding: EdgeInsets.fromLTRB(10, 10, 10, 0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -198,21 +213,24 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                   borderRadius: BorderRadius.circular(26),
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide.none,
-                    ),
+                        side: BorderSide.none,
+                        backgroundColor: Color(0xFFECEBEB)),
                     onPressed: () {
                       Navigator.pushNamed(context, '/favorite');
                     },
                     child: const Text("收藏"),
                   ),
                 )),
+                Divider(
+                  indent: 10,
+                ),
                 Expanded(
                     child: ClipRRect(
                   borderRadius: BorderRadius.circular(26),
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide.none,
-                    ),
+                        side: BorderSide.none,
+                        backgroundColor: Color(0xFFECEBEB)),
                     onPressed: () {
                       Navigator.pushNamed(context, '/recycle');
                     },
@@ -220,7 +238,148 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                   ),
                 ))
               ],
-            ))
+            )),
+        Divider(
+          color: Colors.transparent,
+          height: 14,
+        ),
+        Expanded(
+            child: Container(
+                width: double.infinity,
+                margin: EdgeInsets.only(left: 16, right: 16),
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: Color(0xFFECEBEB),
+                    borderRadius: BorderRadius.all(Radius.circular(10))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: EdgeInsets.only(top: 10, bottom: 10),
+                      child: Text(
+                        "设置",
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide.none,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/favorite');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "个人信息",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const Text(
+                              "昵称,头像 >",
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide.none,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/favorite');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "安全中心",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const Text(
+                              "修改密码 >",
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide.none,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/favorite');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "账号设置",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const Text(
+                              "退出登录 >",
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide.none,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/favorite');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "关于",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const Text(
+                              "版本信息 >",
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ))),
+        Divider(
+          color: Colors.transparent,
+          height: 16,
+        )
       ],
     );
   }
