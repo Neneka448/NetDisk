@@ -1,11 +1,14 @@
 import 'dart:convert';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import '../GlobalVariables.dart' show baseURl;
 import '../GlobalClass.dart' show NavigatorKey, getFormatTime;
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
+import '../Store.dart';
 
 class File {
   final String fileName;
@@ -14,15 +17,18 @@ class File {
   final String fileType;
   final String fileID;
   final DateTime lastModifiedTime;
+  var deleteFlag=false;
 
-  const File(
+  File(
       {required this.fileName,
       required this.fileSize,
       required this.date,
       required this.fileType,
       required this.fileID,
       required this.lastModifiedTime});
-
+  delete(){
+    deleteFlag=true;
+  }
   factory File.fromJson(Map<String, dynamic> json) {
     return File(
         fileName: json['file_name'],
@@ -45,6 +51,9 @@ class FileListTree {
   void buildChildren(List<File> f) {
     children = {};
     for (var item in f) {
+      if(item.deleteFlag==true){
+        continue;
+      }
       children![item.fileID] = FileListTree(item);
       children![item.fileID]?.parent = this;
     }
@@ -208,6 +217,7 @@ class _FileListState extends State<FileList> {
 
   @override
   Widget build(BuildContext context) {
+    final Store store = Get.find();
     var itemWidget = visitor.getChildren().map((e) {
       double fileSize = double.parse(e.fileSize);
       String fileSizeExt = "bit";
@@ -240,14 +250,19 @@ class _FileListState extends State<FileList> {
                 context: context,
                 builder: (BuildContext context) {
                   return SizedBox(
-                    height: 60,
+                    height: 70,
                     width: double.infinity,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none),
-                            onPressed: () {},
+                        Expanded(child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                                side: BorderSide.none,
+                                primary: Color(0x2B196322)
+                            ),
+                            onPressed: () {
+
+                            },
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -260,159 +275,323 @@ class _FileListState extends State<FileList> {
                                   style: TextStyle(color: Colors.white),
                                 )
                               ],
-                            )),
-                        OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            ))),
+                        Expanded(child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
                             onPressed: () {
                               //TODO: shareDialog
                               showDialog(
                                 builder: (BuildContext context) {
-                                  return Dialog(
-                                    child: Container(
-                                      width: 200,
-                                      height: 220,
-                                      padding:
-                                          EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 16),
-                                      decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(10)),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            width: double.infinity,
-                                            child: Text(
-                                              "分享",
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                          Divider(
-                                            height: 16,
-                                          ),
-                                          Row(
-                                            children: [
-                                              Column(
-                                                children: [
-                                                  Container(
-                                                    width: 50,
-                                                    height: 50,
-                                                    decoration: BoxDecoration(
-                                                        color: Color.fromARGB(255, 240, 240, 240),
-                                                        shape: BoxShape.circle),
-                                                    child: IconButton(
-                                                      icon: Icon(Icons.link),
-                                                      onPressed: () {
-                                                        print(1);
-                                                      },
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    "复制链接",
+                                  return StatefulBuilder(
+                                      builder:(context,setState){
+                                        return Dialog(
+                                          child: Container(
+                                            width: 200,
+                                            height: 230,
+                                            padding:
+                                            EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 16),
+                                            decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(10)),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Container(
+                                                  width: double.infinity,
+                                                  child: Text(
+                                                    "分享",
+                                                    textAlign: TextAlign.center,
                                                     style: TextStyle(
-                                                        fontSize: 14, color: Colors.black),
-                                                  )
-                                                ],
-                                              ),
-                                              Divider(
-                                                color: Colors.transparent,
-                                                indent: 10,
-                                              ),
-                                              Column(
-                                                children: [
-                                                  Container(
-                                                    width: 50,
-                                                    height: 50,
-                                                    decoration: BoxDecoration(
-                                                        color: Color.fromARGB(255, 240, 240, 240),
-                                                        shape: BoxShape.circle),
-                                                    child: IconButton(
-                                                      icon: Icon(Icons.share),
-                                                      onPressed: () {
-                                                        Share.share("关注嘉然顿顿解馋");
-                                                      },
-                                                    ),
+                                                        color: Colors.black,
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.bold),
                                                   ),
-                                                  Text(
-                                                    "其他应用",
-                                                    style: TextStyle(
-                                                        fontSize: 14, color: Colors.black),
-                                                  )
-                                                ],
-                                              )
-                                            ],
-                                          ),
-                                          OutlinedButton(
-                                              style: OutlinedButton.styleFrom(
-                                                side: BorderSide.none,
-                                                backgroundColor: Color.fromARGB(255, 240, 240, 240),
-                                              ),
-                                              onPressed: () {
-                                                showModalBottomSheet(
-                                                    context: context,
-                                                    backgroundColor: Colors.transparent,
-                                                    builder: (BuildContext context) {
-                                                      return Container(
-
-                                                        child: ClipRRect(
-                                                          borderRadius: BorderRadius.only(
-                                                              topLeft: Radius.circular(16),
-                                                              topRight: Radius.circular(16)),
-                                                          child: Container(
-                                                            height: 200,
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.white,
-                                                            ),
-                                                            child: Text("11111111111111"),
+                                                ),
+                                                Divider(
+                                                  height: 16,
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    Column(
+                                                      children: [
+                                                        Container(
+                                                          width: 50,
+                                                          height: 50,
+                                                          decoration: BoxDecoration(
+                                                              color: Color.fromARGB(255, 240, 240, 240),
+                                                              shape: BoxShape.circle),
+                                                          child: IconButton(
+                                                            icon: Icon(Icons.link),
+                                                            onPressed: () {
+                                                              final chosenIDs=chosenMap.keys.toList();
+                                                              http.post(Uri.parse(baseURl+'/share/sharefile'),headers: {
+                                                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
+                                                              },body: jsonEncode({
+                                                                "ids":chosenIDs,
+                                                                "psw":shareFilePsw,
+                                                                "days":shareFileValidDays
+                                                              })).then((value){
+                                                                final data=jsonDecode(value.body)['data'];
+                                                                Clipboard.setData(ClipboardData(text: "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}."));
+                                                              });
+                                                            },
                                                           ),
                                                         ),
-                                                      );
-                                                    });
-                                              },
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                children: [
-                                                  RichText(
-                                                      text: TextSpan(children: [
-                                                    TextSpan(
-                                                        text: "$shareFileValidDays ",
-                                                        style: TextStyle(
-                                                            color: Colors.blue,
-                                                            fontWeight: FontWeight.bold)),
-                                                    TextSpan(
-                                                        text: "天内有效",
-                                                        style: TextStyle(color: Colors.black))
-                                                  ])),
-                                                  Text(
-                                                    ">",
-                                                    style: TextStyle(color: Colors.grey),
-                                                  )
-                                                ],
-                                              )),
-                                          ConstrainedBox(
-                                            constraints: BoxConstraints(maxHeight: 40),
-                                            child: TextField(
-                                              decoration: const InputDecoration(
-                                                  hintText: "设置提取码(不设置时自动生成)",
-                                                  fillColor: Color.fromARGB(255, 240, 240, 240),
-                                                  filled: true,
-                                                  focusColor: Color.fromARGB(255, 248, 248, 248),
-                                                  border: OutlineInputBorder(
-                                                      borderSide: BorderSide.none),
-                                                  contentPadding:
-                                                      EdgeInsets.only(left: 16, top: 6, bottom: 6)),
-                                              onChanged: (v) => setState(() {
-                                                shareFilePsw = v;
-                                              }),
+                                                        Text(
+                                                          "复制链接",
+                                                          style: TextStyle(
+                                                              fontSize: 14, color: Colors.black),
+                                                        )
+                                                      ],
+                                                    ),
+                                                    Divider(
+                                                      color: Colors.transparent,
+                                                      indent: 10,
+                                                    ),
+                                                    Column(
+                                                      children: [
+                                                        Container(
+                                                          width: 50,
+                                                          height: 50,
+                                                          decoration: BoxDecoration(
+                                                              color: Color.fromARGB(255, 240, 240, 240),
+                                                              shape: BoxShape.circle),
+                                                          child: IconButton(
+                                                            icon: Icon(Icons.share),
+                                                            onPressed: () {
+                                                              final chosenIDs=chosenMap.keys.toList();
+                                                              http.post(Uri.parse(baseURl+'/share/sharefile'),headers: {
+                                                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
+                                                              },body: jsonEncode({
+                                                                "ids":chosenIDs,
+                                                                "psw":shareFilePsw,
+                                                                "days":shareFileValidDays
+                                                              })).then((value){
+                                                                final data=jsonDecode(value.body)['data'];
+                                                                Share.share("Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}.");
+                                                              });
+
+                                                            },
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          "其他应用",
+                                                          style: TextStyle(
+                                                              fontSize: 14, color: Colors.black),
+                                                        )
+                                                      ],
+                                                    )
+                                                  ],
+                                                ),
+                                                OutlinedButton(
+                                                    style: OutlinedButton.styleFrom(
+                                                      side: BorderSide.none,
+                                                      backgroundColor: Color.fromARGB(255, 240, 240, 240),
+                                                    ),
+                                                    onPressed: () {
+                                                      showModalBottomSheet(
+                                                          context: context,
+
+                                                          backgroundColor: Colors.transparent,
+                                                          builder: (BuildContext context,) {
+                                                            return Container(
+                                                              height: 300,
+                                                              child: ClipRRect(
+                                                                  borderRadius: BorderRadius.only(
+                                                                      topLeft: Radius.circular(16),
+                                                                      topRight: Radius.circular(16)),
+                                                                  child: Container(
+                                                                    color: Colors.white,
+                                                                    child: Column(
+                                                                      children: [
+                                                                        Container(
+                                                                          child: Text("有效期设置"),
+                                                                        ),
+                                                                        Divider(),
+                                                                        Expanded(child: OutlinedButton(
+                                                                            style: OutlinedButton.styleFrom(
+                                                                                side: BorderSide.none
+                                                                            ),
+                                                                            onPressed: (){
+                                                                              setState(() {
+                                                                                shareFileValidDays=7;
+                                                                                Navigator.pop(context);
+                                                                              });
+                                                                            },
+                                                                            child: Container(
+                                                                              width: double.infinity,
+                                                                              child: Row(
+                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                children: [
+                                                                                  RichText(
+                                                                                      text: TextSpan(children: [
+                                                                                        TextSpan(
+                                                                                            text: "7",
+                                                                                            style: TextStyle(
+                                                                                                color: Colors.blue,
+                                                                                                fontWeight: FontWeight.bold)),
+                                                                                        TextSpan(
+                                                                                            text: "天内有效",
+                                                                                            style: TextStyle(color: Colors.black))
+                                                                                      ])),
+                                                                                  Icon(Icons.check,color: shareFileValidDays==7?Colors.blue:Colors.transparent)
+                                                                                ],
+                                                                              ),
+                                                                            )
+                                                                        )),
+                                                                        Expanded(
+                                                                            child: OutlinedButton(
+                                                                                style: OutlinedButton.styleFrom(
+                                                                                    side: BorderSide.none
+                                                                                ),
+                                                                                onPressed: (){
+                                                                                  setState(() {
+                                                                                    shareFileValidDays=14;
+                                                                                    Navigator.pop(context);
+
+                                                                                  });
+
+                                                                                },
+                                                                                child: Container(
+                                                                                    width: double.infinity,
+                                                                                    child: Row(
+                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                      children: [
+                                                                                        RichText(
+                                                                                            text: TextSpan(children: [
+                                                                                              TextSpan(
+                                                                                                  text: "14",
+                                                                                                  style: TextStyle(
+                                                                                                      color: Colors.blue,
+                                                                                                      fontWeight: FontWeight.bold)),
+                                                                                              TextSpan(
+                                                                                                  text: "天内有效",
+                                                                                                  style: TextStyle(color: Colors.black))
+                                                                                            ])),
+                                                                                        Icon(Icons.check,color: shareFileValidDays==14?Colors.blue:Colors.transparent)
+                                                                                      ],
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                        ),
+                                                                        Expanded(
+                                                                          child: OutlinedButton(
+                                                                              style: OutlinedButton.styleFrom(
+                                                                                  side: BorderSide.none
+                                                                              ),
+                                                                              onPressed: (){
+                                                                                setState(() {
+                                                                                  shareFileValidDays=30;
+                                                                                  Navigator.pop(context);
+
+                                                                                });
+                                                                              },
+                                                                              child: Container(
+                                                                                width: double.infinity,
+                                                                                child: Row(
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  children: [
+                                                                                    RichText(
+                                                                                        text: TextSpan(children: [
+                                                                                          TextSpan(
+                                                                                              text: "30",
+                                                                                              style: TextStyle(
+                                                                                                  color: Colors.blue,
+                                                                                                  fontWeight: FontWeight.bold)),
+                                                                                          TextSpan(
+                                                                                              text: "天内有效",
+                                                                                              style: TextStyle(color: Colors.black))
+                                                                                        ])),
+                                                                                    Icon(Icons.check,color: shareFileValidDays==30?Colors.blue:Colors.transparent)
+                                                                                  ],
+                                                                                ),
+                                                                              )
+                                                                          ),
+                                                                        ),
+                                                                        Expanded(child: OutlinedButton(
+                                                                            style: OutlinedButton.styleFrom(
+                                                                                side: BorderSide.none
+                                                                            ),
+                                                                            onPressed: (){
+                                                                              setState(() {
+                                                                                shareFileValidDays=36500;
+                                                                                Navigator.pop(context);
+
+                                                                              });
+                                                                            },
+                                                                            child: Container(
+                                                                              width: double.infinity,
+                                                                              child: Row(
+                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                children: [
+                                                                                  Column(
+                                                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                    children: [
+                                                                                      Text("永久有效",style: TextStyle(
+                                                                                          fontWeight: FontWeight.bold,
+                                                                                          color: Colors.black
+                                                                                      ),),
+                                                                                      Text("在手动取消前，分享持续有效",style: TextStyle(
+                                                                                          fontSize: 14,
+                                                                                          color: Colors.grey
+                                                                                      ),)
+                                                                                    ],
+                                                                                  ),
+                                                                                  Icon(Icons.check,color: shareFileValidDays==36500?Colors.blue:Colors.transparent)
+                                                                                ],
+                                                                              ),
+                                                                            )
+                                                                        ),)
+                                                                      ],
+                                                                    ),
+                                                                  )
+                                                              ),
+                                                            );
+                                                          });
+                                                    },
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                      children: [
+                                                        RichText(
+                                                            text: TextSpan(children: [
+                                                              TextSpan(
+                                                                  text: "$shareFileValidDays ",
+                                                                  style: TextStyle(
+                                                                      color: Colors.blue,
+                                                                      fontWeight: FontWeight.bold)),
+                                                              TextSpan(
+                                                                  text: "天内有效",
+                                                                  style: TextStyle(color: Colors.black))
+                                                            ])),
+                                                        Text(
+                                                          ">",
+                                                          style: TextStyle(color: Colors.grey),
+                                                        )
+                                                      ],
+                                                    )),
+                                                Container(
+                                                  constraints: BoxConstraints(maxHeight: 40),
+                                                  child: TextField(
+                                                    decoration: const InputDecoration(
+                                                        hintText: "设置提取码(不设置时自动生成)",
+                                                        fillColor: Color.fromARGB(255, 240, 240, 240),
+                                                        filled: true,
+                                                        focusColor: Color.fromARGB(255, 248, 248, 248),
+                                                        border: OutlineInputBorder(
+                                                            borderSide: BorderSide.none),
+                                                        contentPadding: EdgeInsets.only(left:10,top:10,bottom: 10)
+                                                    ),
+                                                    onChanged: (v) => setState(() {
+                                                      shareFilePsw = v;
+                                                    }),
+                                                  ),
+                                                )
+                                              ],
                                             ),
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                                  );
+                                          ),
+                                        );
+                                      } );
                                 },
                                 context: context,
                                 barrierDismissible: true,
@@ -425,23 +604,18 @@ class _FileListState extends State<FileList> {
                                 Icon(Icons.share, color: Colors.white),
                                 Text("分享", style: TextStyle(color: Colors.white)),
                               ],
-                            )),
-                        OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none),
-                            onPressed: () {},
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.delete,
-                                  color: Colors.white,
-                                ),
-                                Text("删除", style: TextStyle(color: Colors.white)),
-                              ],
-                            )),
-                        OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none),
-                            onPressed: () {},
+                            ))),
+                        Expanded(child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
+                            onPressed: () {
+                              final chosenIDs=chosenMap.keys.toList();
+                              http.post(Uri.parse(baseURl+'/favorite/add'),headers: {
+                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
+                              },body: jsonEncode({"ids":chosenIDs})).then((v){
+                                final data=jsonDecode(v.body)["data"]["result"];
+                                print(data);
+                              });
+                            },
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -451,9 +625,44 @@ class _FileListState extends State<FileList> {
                                 ),
                                 Text("收藏", style: TextStyle(color: Colors.white)),
                               ],
-                            )),
-                        OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none),
+                            ))),
+                        Expanded(child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322),backgroundColor: Colors.red),
+                            onPressed: () {
+                              final chosenIDs=chosenMap.keys.toList();
+                              http.post(Uri.parse(baseURl+"/file/delete"),headers: {
+                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}",
+                              },body: jsonEncode({
+                                "ids":chosenIDs
+                              })).then((value){
+                                dynamic data=jsonDecode(value.body);
+                                if(data['data']['result']=='ok'){
+                                  print(111);
+                                  setState(() {
+                                    for(final item in chosenIDs){
+                                      visitor.visitee.getChild(item).file.delete();
+                                    }
+                                    visitor = visitor.buildChildren(files);
+                                    chooseMode=false;
+                                    Navigator.pop(context);
+                                  });
+
+                                }
+
+                              });
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
+                                Text("删除", style: TextStyle(color: Colors.white)),
+                              ],
+                            ))),
+                        Expanded(child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
                             onPressed: () {},
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -464,7 +673,7 @@ class _FileListState extends State<FileList> {
                                 ),
                                 Text("更多", style: TextStyle(color: Colors.white))
                               ],
-                            ))
+                            )))
                       ],
                     ),
                   );
