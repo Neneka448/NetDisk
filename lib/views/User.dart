@@ -157,11 +157,17 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
             child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircleAvatar(
-              child: Icon(Icons.people),
-            ),
+            CircleAvatar(
+              radius: 30,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(50),
+                child: Obx((){
+                  return Image.network(store.user.value.avatar);
+                },
+              ),
+            ),),
             Container(
-                child: Obx(() => Text(store.user.value.name,
+                child: Obx(() => Text(store.user.value.nickname==""?store.user.value.name:store.user.value.nickname,
                     style: TextStyle(fontSize: 20))),
                 margin: const EdgeInsets.fromLTRB(10, 0, 0, 0)),
           ],
@@ -269,7 +275,7 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                           side: BorderSide.none,
                         ),
                         onPressed: () {
-                          Navigator.pushNamed(context, '/favorite');
+                          Navigator.pushNamed(context, '/settings/userinfo');
                         },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -297,7 +303,7 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                           side: BorderSide.none,
                         ),
                         onPressed: () {
-                          Navigator.pushNamed(context, '/favorite');
+                          Navigator.pushNamed(context, '/settings/account');
                         },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -325,35 +331,12 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                           side: BorderSide.none,
                         ),
                         onPressed: () {
-                          Navigator.pushNamed(context, '/favorite');
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "账号设置",
-                              style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            const Text(
-                              "退出登录 >",
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 12),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide.none,
-                        ),
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/favorite');
+                          showAboutDialog(
+                              context: context,
+                              applicationName: "Netdisk",
+                              applicationVersion: "v1.0.0",
+                              applicationIcon: Icon(Icons.token)
+                          );
                         },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -368,12 +351,41 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                             const Text(
                               "版本信息 >",
                               style:
+                              TextStyle(color: Colors.grey, fontSize: 12),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide.none,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/settings/other');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "其他设置",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const Text(
+                              "网络,退出登录 >",
+                              style:
                                   TextStyle(color: Colors.grey, fontSize: 12),
                             )
                           ],
                         ),
                       ),
                     ),
+
                   ],
                 ))),
         Divider(

@@ -159,6 +159,7 @@ class FileList extends StatefulWidget {
 
 class _FileListState extends State<FileList> {
   bool chooseMode = false;
+  final Store store = Get.find();
   var chosenMap = <String, bool>{};
   var shareFileValidDays = 30;
   var shareFilePsw = '';
@@ -205,6 +206,7 @@ class _FileListState extends State<FileList> {
     super.widget.backToParentCallback(() {
       if (chooseMode) {
         setState(() {
+          store.chooseMode.value=false;
           chooseMode = false;
         });
       } else {
@@ -217,7 +219,6 @@ class _FileListState extends State<FileList> {
 
   @override
   Widget build(BuildContext context) {
-    final Store store = Get.find();
     var itemWidget = visitor.getChildren().map((e) {
       double fileSize = double.parse(e.fileSize);
       String fileSizeExt = "bit";
@@ -240,6 +241,7 @@ class _FileListState extends State<FileList> {
           ),
           onLongPress: () {
             setState(() {
+              store.chooseMode.value=true;
               chooseMode = true;
               chosenMap[e.fileID] = true;
             });
@@ -783,6 +785,7 @@ class _FileListState extends State<FileList> {
         onWillPop: () {
           if (chooseMode) {
             setState(() {
+              store.chooseMode.value=false;
               chooseMode = false;
               chosenMap = {};
             });

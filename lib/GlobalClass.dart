@@ -22,9 +22,13 @@ class User{
   late String id;
   late int maxSpace;
   late int usedSpace;
-  User({required this.name,required this.id,required this.maxSpace,required this.usedSpace});
+  late String avatar;
+  late String nickname;
+  User({required this.name,required this.id,required this.maxSpace,required this.usedSpace,required this.avatar,required this.nickname});
   factory User.fromJson(Map<String,dynamic> json){
-    return User(name: json['user_name'], id: json['user_id'], maxSpace: json['max_space'], usedSpace: json['used_space']);
+    return User(name: json['user_name'], id: json['user_id'], maxSpace: json['max_space'],
+        usedSpace: json['used_space'],
+        avatar: json['avatar'],nickname: json['nickname']);
   }
 }
 class SharedItemInfo{
