@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart' as path_provider;
 
 class DownloadList extends StatefulWidget {
   const DownloadList({Key? key}) : super(key: key);
@@ -9,6 +11,19 @@ class DownloadList extends StatefulWidget {
 }
 
 class _DownloadListState extends State<DownloadList> {
+  var files = <FileSystemEntity>[];
+  var pageMode = 0; // 0 download 1 upload
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    (() async {
+      var dir = await path_provider.getTemporaryDirectory();
+      dir=await dir.createTemp("download");
+      files = dir.listSync(recursive: false);
+    })();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,7 +40,87 @@ class _DownloadListState extends State<DownloadList> {
               },
             )),
       ),
-      body: const Text("111"),
+      body: Container(
+        padding: EdgeInsets.only(left: 10, right: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+              padding: EdgeInsets.only(top: 10, bottom: 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: EdgeInsets.only(left: 10, right: 10),
+                  color: Color.fromARGB(255, 187, 187, 187),
+                  child: Row(
+                    children: [
+                      Expanded(
+                          child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                                side: BorderSide.none,
+                                backgroundColor: pageMode == 0
+                                    ? Colors.white
+                                    : Color.fromARGB(255, 187, 187, 187)),
+                            onPressed: () {
+                              setState(() {
+                                pageMode = 0;
+                              });
+                            },
+                            child: Text(
+                              "下载列表",
+                              style: TextStyle(color: Colors.black),
+                            )),
+                      )),
+                      Expanded(
+                          child: ClipRRect(
+                        child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                                side: BorderSide.none,
+                                backgroundColor: pageMode == 1
+                                    ? Colors.white
+                                    : Color.fromARGB(255, 187, 187, 187)),
+                            onPressed: () {
+                              setState(() {
+                                pageMode = 1;
+                              });
+                            },
+                            child: Text(
+                              "上传列表",
+                              style: TextStyle(color: Colors.black),
+                            )),
+                      ))
+                    ],
+                  ),
+                ),
+              )),
+          Text("下载中"),
+          DownloadBox(files: files)
+        ]),
+      ),
+    );
+  }
+}
+
+class DownloadBox extends StatefulWidget {
+  List<FileSystemEntity> files;
+
+  DownloadBox({Key? key, required this.files}) : super(key: key);
+
+  @override
+  State<DownloadBox> createState() => _DownloadBoxState();
+}
+
+class _DownloadBoxState extends State<DownloadBox> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      child: widget.files.isNotEmpty?ListView.builder(
+        shrinkWrap: true,
+        itemCount: widget.files.length,
+        itemBuilder: (BuildContext context, int index) {
+          return SizedBox(height: 60, child: Text("${widget.files[index].path}"));
+        },
+      ):Text("No File"),
     );
   }
 }

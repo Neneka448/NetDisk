@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:netdisk/Download.dart';
+import 'package:path_provider/path_provider.dart';
 import '../GlobalVariables.dart' show baseURl;
 import '../GlobalClass.dart' show NavigatorKey, getFormatTime;
 import 'package:share_plus/share_plus.dart';
@@ -17,7 +19,7 @@ class File {
   final String fileType;
   final String fileID;
   final DateTime lastModifiedTime;
-  var deleteFlag=false;
+  var deleteFlag = false;
 
   File(
       {required this.fileName,
@@ -26,9 +28,11 @@ class File {
       required this.fileType,
       required this.fileID,
       required this.lastModifiedTime});
-  delete(){
-    deleteFlag=true;
+
+  delete() {
+    deleteFlag = true;
   }
+
   factory File.fromJson(Map<String, dynamic> json) {
     return File(
         fileName: json['file_name'],
@@ -36,8 +40,7 @@ class File {
         date: json['date'],
         fileType: json['file_type'],
         fileID: json['file_id'],
-        lastModifiedTime:
-            DateTime.fromMillisecondsSinceEpoch(int.parse(json['last_modified_time'])));
+        lastModifiedTime: DateTime.fromMillisecondsSinceEpoch(int.parse(json['last_modified_time'])));
   }
 }
 
@@ -51,7 +54,7 @@ class FileListTree {
   void buildChildren(List<File> f) {
     children = {};
     for (var item in f) {
-      if(item.deleteFlag==true){
+      if (item.deleteFlag == true) {
         continue;
       }
       children![item.fileID] = FileListTree(item);
@@ -149,8 +152,9 @@ class FileListTreeVisitor {
 class FileList extends StatefulWidget {
   final Function backToParentCallback;
   final Function onChangeNavi;
+  final File? initFile;
 
-  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi})
+  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile})
       : super(key: key);
 
   @override
@@ -174,12 +178,23 @@ class _FileListState extends State<FileList> {
   late FileListTreeVisitor visitor = FileListTreeVisitor(fileTree);
 
   void getFileListWhenInit() async {
-    final res = await http.get(Uri.parse(baseURl + "/disk/list"));
-    List<dynamic> t = jsonDecode(res.body);
-    files = t.map((ele) => File.fromJson(ele)).toList();
-    setState(() {
-      visitor = visitor.buildChildren(files);
-    });
+    if (widget.initFile != null) {
+      final res = await http.post(Uri.parse(baseURl + "/disk/list/details"),
+          headers: {"Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"},
+          body: jsonEncode({"id": widget.initFile!.fileID}));
+      List<dynamic> t = jsonDecode(res.body);
+      files = t.map((ele) => File.fromJson(ele)).toList();
+      setState(() {
+        visitor = visitor.buildChildren(files);
+      });
+    } else {
+      final res = await http.get(Uri.parse(baseURl + "/disk/list"));
+      List<dynamic> t = jsonDecode(res.body);
+      files = t.map((ele) => File.fromJson(ele)).toList();
+      setState(() {
+        visitor = visitor.buildChildren(files);
+      });
+    }
   }
 
   @override
@@ -206,7 +221,7 @@ class _FileListState extends State<FileList> {
     super.widget.backToParentCallback(() {
       if (chooseMode) {
         setState(() {
-          store.chooseMode.value=false;
+          store.chooseMode.value = false;
           chooseMode = false;
         });
       } else {
@@ -241,7 +256,7 @@ class _FileListState extends State<FileList> {
           ),
           onLongPress: () {
             setState(() {
-              store.chooseMode.value=true;
+              store.chooseMode.value = true;
               chooseMode = true;
               chosenMap[e.fileID] = true;
             });
@@ -257,44 +272,52 @@ class _FileListState extends State<FileList> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                                side: BorderSide.none,
-                                primary: Color(0x2B196322)
-                            ),
-                            onPressed: () {
-
-                            },
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.file_download_outlined,
-                                  color: Colors.white,
-                                ),
-                                Text(
-                                  "下载",
-                                  style: TextStyle(color: Colors.white),
-                                )
-                              ],
-                            ))),
-                        Expanded(child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
-                            onPressed: () {
-                              //TODO: shareDialog
-                              showDialog(
-                                builder: (BuildContext context) {
-                                  return StatefulBuilder(
-                                      builder:(context,setState){
+                        Expanded(
+                            child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
+                                onPressed: () async {
+                                  Directory? url;
+                                  if (Platform.isAndroid) {
+                                    url = await getApplicationDocumentsDirectory();
+                                  } else if (Platform.isWindows) {
+                                    url = await getDownloadsDirectory();
+                                  }
+                                  downloadWithChunks(
+                                      'https://oss.rosmontis.top/passageOther/diana1.jpg', url!.path + '/1.temp',
+                                      onReceiveProgress: (received, total) {
+                                    if (total != -1) {
+                                      print("${(received / total * 100).floor()}%");
+                                    }
+                                  });
+                                },
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.file_download_outlined,
+                                      color: Colors.white,
+                                    ),
+                                    Text(
+                                      "下载",
+                                      style: TextStyle(color: Colors.white),
+                                    )
+                                  ],
+                                ))),
+                        Expanded(
+                            child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
+                                onPressed: () {
+                                  //TODO: shareDialog
+                                  showDialog(
+                                    builder: (BuildContext context) {
+                                      return StatefulBuilder(builder: (context, setState) {
                                         return Dialog(
                                           child: Container(
                                             width: 200,
                                             height: 230,
-                                            padding:
-                                            EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 16),
+                                            padding: EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 16),
                                             decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius: BorderRadius.circular(10)),
+                                                color: Colors.white, borderRadius: BorderRadius.circular(10)),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
@@ -304,9 +327,7 @@ class _FileListState extends State<FileList> {
                                                     "分享",
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(
-                                                        color: Colors.black,
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.bold),
+                                                        color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
                                                   ),
                                                 ),
                                                 Divider(
@@ -325,24 +346,30 @@ class _FileListState extends State<FileList> {
                                                           child: IconButton(
                                                             icon: Icon(Icons.link),
                                                             onPressed: () {
-                                                              final chosenIDs=chosenMap.keys.toList();
-                                                              http.post(Uri.parse(baseURl+'/share/sharefile'),headers: {
-                                                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                                              },body: jsonEncode({
-                                                                "ids":chosenIDs,
-                                                                "psw":shareFilePsw,
-                                                                "days":shareFileValidDays
-                                                              })).then((value){
-                                                                final data=jsonDecode(value.body)['data'];
-                                                                Clipboard.setData(ClipboardData(text: "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}."));
+                                                              final chosenIDs = chosenMap.keys.toList();
+                                                              http
+                                                                  .post(Uri.parse(baseURl + '/share/sharefile'),
+                                                                      headers: {
+                                                                        "Authorization":
+                                                                            "Basic ${base64Encode(utf8.encode(store.token.value))}"
+                                                                      },
+                                                                      body: jsonEncode({
+                                                                        "ids": chosenIDs,
+                                                                        "psw": shareFilePsw,
+                                                                        "days": shareFileValidDays
+                                                                      }))
+                                                                  .then((value) {
+                                                                final data = jsonDecode(value.body)['data'];
+                                                                Clipboard.setData(ClipboardData(
+                                                                    text:
+                                                                        "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}."));
                                                               });
                                                             },
                                                           ),
                                                         ),
                                                         Text(
                                                           "复制链接",
-                                                          style: TextStyle(
-                                                              fontSize: 14, color: Colors.black),
+                                                          style: TextStyle(fontSize: 14, color: Colors.black),
                                                         )
                                                       ],
                                                     ),
@@ -361,25 +388,29 @@ class _FileListState extends State<FileList> {
                                                           child: IconButton(
                                                             icon: Icon(Icons.share),
                                                             onPressed: () {
-                                                              final chosenIDs=chosenMap.keys.toList();
-                                                              http.post(Uri.parse(baseURl+'/share/sharefile'),headers: {
-                                                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                                              },body: jsonEncode({
-                                                                "ids":chosenIDs,
-                                                                "psw":shareFilePsw,
-                                                                "days":shareFileValidDays
-                                                              })).then((value){
-                                                                final data=jsonDecode(value.body)['data'];
-                                                                Share.share("Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}.");
+                                                              final chosenIDs = chosenMap.keys.toList();
+                                                              http
+                                                                  .post(Uri.parse(baseURl + '/share/sharefile'),
+                                                                      headers: {
+                                                                        "Authorization":
+                                                                            "Basic ${base64Encode(utf8.encode(store.token.value))}"
+                                                                      },
+                                                                      body: jsonEncode({
+                                                                        "ids": chosenIDs,
+                                                                        "psw": shareFilePsw,
+                                                                        "days": shareFileValidDays
+                                                                      }))
+                                                                  .then((value) {
+                                                                final data = jsonDecode(value.body)['data'];
+                                                                Share.share(
+                                                                    "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}.");
                                                               });
-
                                                             },
                                                           ),
                                                         ),
                                                         Text(
                                                           "其他应用",
-                                                          style: TextStyle(
-                                                              fontSize: 14, color: Colors.black),
+                                                          style: TextStyle(fontSize: 14, color: Colors.black),
                                                         )
                                                       ],
                                                     )
@@ -393,9 +424,10 @@ class _FileListState extends State<FileList> {
                                                     onPressed: () {
                                                       showModalBottomSheet(
                                                           context: context,
-
                                                           backgroundColor: Colors.transparent,
-                                                          builder: (BuildContext context,) {
+                                                          builder: (
+                                                            BuildContext context,
+                                                          ) {
                                                             return Container(
                                                               height: 300,
                                                               child: ClipRRect(
@@ -410,145 +442,165 @@ class _FileListState extends State<FileList> {
                                                                           child: Text("有效期设置"),
                                                                         ),
                                                                         Divider(),
-                                                                        Expanded(child: OutlinedButton(
-                                                                            style: OutlinedButton.styleFrom(
-                                                                                side: BorderSide.none
-                                                                            ),
-                                                                            onPressed: (){
-                                                                              setState(() {
-                                                                                shareFileValidDays=7;
-                                                                                Navigator.pop(context);
-                                                                              });
-                                                                            },
-                                                                            child: Container(
-                                                                              width: double.infinity,
-                                                                              child: Row(
-                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                                children: [
-                                                                                  RichText(
-                                                                                      text: TextSpan(children: [
+                                                                        Expanded(
+                                                                            child: OutlinedButton(
+                                                                                style: OutlinedButton.styleFrom(
+                                                                                    side: BorderSide.none),
+                                                                                onPressed: () {
+                                                                                  setState(() {
+                                                                                    shareFileValidDays = 7;
+                                                                                    Navigator.pop(context);
+                                                                                  });
+                                                                                },
+                                                                                child: Container(
+                                                                                  width: double.infinity,
+                                                                                  child: Row(
+                                                                                    mainAxisAlignment:
+                                                                                        MainAxisAlignment.spaceBetween,
+                                                                                    children: [
+                                                                                      RichText(
+                                                                                          text: TextSpan(children: [
                                                                                         TextSpan(
                                                                                             text: "7",
                                                                                             style: TextStyle(
                                                                                                 color: Colors.blue,
-                                                                                                fontWeight: FontWeight.bold)),
+                                                                                                fontWeight:
+                                                                                                    FontWeight.bold)),
                                                                                         TextSpan(
                                                                                             text: "天内有效",
-                                                                                            style: TextStyle(color: Colors.black))
+                                                                                            style: TextStyle(
+                                                                                                color: Colors.black))
                                                                                       ])),
-                                                                                  Icon(Icons.check,color: shareFileValidDays==7?Colors.blue:Colors.transparent)
-                                                                                ],
-                                                                              ),
-                                                                            )
-                                                                        )),
+                                                                                      Icon(Icons.check,
+                                                                                          color: shareFileValidDays == 7
+                                                                                              ? Colors.blue
+                                                                                              : Colors.transparent)
+                                                                                    ],
+                                                                                  ),
+                                                                                ))),
                                                                         Expanded(
                                                                             child: OutlinedButton(
                                                                                 style: OutlinedButton.styleFrom(
-                                                                                    side: BorderSide.none
-                                                                                ),
-                                                                                onPressed: (){
+                                                                                    side: BorderSide.none),
+                                                                                onPressed: () {
                                                                                   setState(() {
-                                                                                    shareFileValidDays=14;
+                                                                                    shareFileValidDays = 14;
                                                                                     Navigator.pop(context);
-
                                                                                   });
-
                                                                                 },
                                                                                 child: Container(
                                                                                     width: double.infinity,
                                                                                     child: Row(
-                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                      mainAxisAlignment:
+                                                                                          MainAxisAlignment
+                                                                                              .spaceBetween,
                                                                                       children: [
                                                                                         RichText(
                                                                                             text: TextSpan(children: [
-                                                                                              TextSpan(
-                                                                                                  text: "14",
-                                                                                                  style: TextStyle(
-                                                                                                      color: Colors.blue,
-                                                                                                      fontWeight: FontWeight.bold)),
-                                                                                              TextSpan(
-                                                                                                  text: "天内有效",
-                                                                                                  style: TextStyle(color: Colors.black))
-                                                                                            ])),
-                                                                                        Icon(Icons.check,color: shareFileValidDays==14?Colors.blue:Colors.transparent)
+                                                                                          TextSpan(
+                                                                                              text: "14",
+                                                                                              style: TextStyle(
+                                                                                                  color: Colors.blue,
+                                                                                                  fontWeight:
+                                                                                                      FontWeight.bold)),
+                                                                                          TextSpan(
+                                                                                              text: "天内有效",
+                                                                                              style: TextStyle(
+                                                                                                  color: Colors.black))
+                                                                                        ])),
+                                                                                        Icon(Icons.check,
+                                                                                            color: shareFileValidDays ==
+                                                                                                    14
+                                                                                                ? Colors.blue
+                                                                                                : Colors.transparent)
                                                                                       ],
-                                                                                    )
-                                                                                )
-                                                                            )
-                                                                        ),
+                                                                                    )))),
                                                                         Expanded(
                                                                           child: OutlinedButton(
                                                                               style: OutlinedButton.styleFrom(
-                                                                                  side: BorderSide.none
-                                                                              ),
-                                                                              onPressed: (){
+                                                                                  side: BorderSide.none),
+                                                                              onPressed: () {
                                                                                 setState(() {
-                                                                                  shareFileValidDays=30;
+                                                                                  shareFileValidDays = 30;
                                                                                   Navigator.pop(context);
-
                                                                                 });
                                                                               },
                                                                               child: Container(
                                                                                 width: double.infinity,
                                                                                 child: Row(
-                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  mainAxisAlignment:
+                                                                                      MainAxisAlignment.spaceBetween,
                                                                                   children: [
                                                                                     RichText(
                                                                                         text: TextSpan(children: [
-                                                                                          TextSpan(
-                                                                                              text: "30",
-                                                                                              style: TextStyle(
-                                                                                                  color: Colors.blue,
-                                                                                                  fontWeight: FontWeight.bold)),
-                                                                                          TextSpan(
-                                                                                              text: "天内有效",
-                                                                                              style: TextStyle(color: Colors.black))
-                                                                                        ])),
-                                                                                    Icon(Icons.check,color: shareFileValidDays==30?Colors.blue:Colors.transparent)
+                                                                                      TextSpan(
+                                                                                          text: "30",
+                                                                                          style: TextStyle(
+                                                                                              color: Colors.blue,
+                                                                                              fontWeight:
+                                                                                                  FontWeight.bold)),
+                                                                                      TextSpan(
+                                                                                          text: "天内有效",
+                                                                                          style: TextStyle(
+                                                                                              color: Colors.black))
+                                                                                    ])),
+                                                                                    Icon(Icons.check,
+                                                                                        color: shareFileValidDays == 30
+                                                                                            ? Colors.blue
+                                                                                            : Colors.transparent)
                                                                                   ],
                                                                                 ),
-                                                                              )
-                                                                          ),
+                                                                              )),
                                                                         ),
-                                                                        Expanded(child: OutlinedButton(
-                                                                            style: OutlinedButton.styleFrom(
-                                                                                side: BorderSide.none
-                                                                            ),
-                                                                            onPressed: (){
-                                                                              setState(() {
-                                                                                shareFileValidDays=36500;
-                                                                                Navigator.pop(context);
-
-                                                                              });
-                                                                            },
-                                                                            child: Container(
-                                                                              width: double.infinity,
-                                                                              child: Row(
-                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                                children: [
-                                                                                  Column(
-                                                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                    children: [
-                                                                                      Text("永久有效",style: TextStyle(
-                                                                                          fontWeight: FontWeight.bold,
-                                                                                          color: Colors.black
-                                                                                      ),),
-                                                                                      Text("在手动取消前，分享持续有效",style: TextStyle(
-                                                                                          fontSize: 14,
-                                                                                          color: Colors.grey
-                                                                                      ),)
-                                                                                    ],
-                                                                                  ),
-                                                                                  Icon(Icons.check,color: shareFileValidDays==36500?Colors.blue:Colors.transparent)
-                                                                                ],
-                                                                              ),
-                                                                            )
-                                                                        ),)
+                                                                        Expanded(
+                                                                          child: OutlinedButton(
+                                                                              style: OutlinedButton.styleFrom(
+                                                                                  side: BorderSide.none),
+                                                                              onPressed: () {
+                                                                                setState(() {
+                                                                                  shareFileValidDays = 36500;
+                                                                                  Navigator.pop(context);
+                                                                                });
+                                                                              },
+                                                                              child: Container(
+                                                                                width: double.infinity,
+                                                                                child: Row(
+                                                                                  mainAxisAlignment:
+                                                                                      MainAxisAlignment.spaceBetween,
+                                                                                  children: [
+                                                                                    Column(
+                                                                                      mainAxisAlignment:
+                                                                                          MainAxisAlignment.center,
+                                                                                      crossAxisAlignment:
+                                                                                          CrossAxisAlignment.start,
+                                                                                      children: [
+                                                                                        Text(
+                                                                                          "永久有效",
+                                                                                          style: TextStyle(
+                                                                                              fontWeight:
+                                                                                                  FontWeight.bold,
+                                                                                              color: Colors.black),
+                                                                                        ),
+                                                                                        Text(
+                                                                                          "在手动取消前，分享持续有效",
+                                                                                          style: TextStyle(
+                                                                                              fontSize: 14,
+                                                                                              color: Colors.grey),
+                                                                                        )
+                                                                                      ],
+                                                                                    ),
+                                                                                    Icon(Icons.check,
+                                                                                        color:
+                                                                                            shareFileValidDays == 36500
+                                                                                                ? Colors.blue
+                                                                                                : Colors.transparent)
+                                                                                  ],
+                                                                                ),
+                                                                              )),
+                                                                        )
                                                                       ],
                                                                     ),
-                                                                  )
-                                                              ),
+                                                                  )),
                                                             );
                                                           });
                                                     },
@@ -557,15 +609,12 @@ class _FileListState extends State<FileList> {
                                                       children: [
                                                         RichText(
                                                             text: TextSpan(children: [
-                                                              TextSpan(
-                                                                  text: "$shareFileValidDays ",
-                                                                  style: TextStyle(
-                                                                      color: Colors.blue,
-                                                                      fontWeight: FontWeight.bold)),
-                                                              TextSpan(
-                                                                  text: "天内有效",
-                                                                  style: TextStyle(color: Colors.black))
-                                                            ])),
+                                                          TextSpan(
+                                                              text: "$shareFileValidDays ",
+                                                              style: TextStyle(
+                                                                  color: Colors.blue, fontWeight: FontWeight.bold)),
+                                                          TextSpan(text: "天内有效", style: TextStyle(color: Colors.black))
+                                                        ])),
                                                         Text(
                                                           ">",
                                                           style: TextStyle(color: Colors.grey),
@@ -580,10 +629,8 @@ class _FileListState extends State<FileList> {
                                                         fillColor: Color.fromARGB(255, 240, 240, 240),
                                                         filled: true,
                                                         focusColor: Color.fromARGB(255, 248, 248, 248),
-                                                        border: OutlineInputBorder(
-                                                            borderSide: BorderSide.none),
-                                                        contentPadding: EdgeInsets.only(left:10,top:10,bottom: 10)
-                                                    ),
+                                                        border: OutlineInputBorder(borderSide: BorderSide.none),
+                                                        contentPadding: EdgeInsets.only(left: 10, top: 10, bottom: 10)),
                                                     onChanged: (v) => setState(() {
                                                       shareFilePsw = v;
                                                     }),
@@ -593,89 +640,110 @@ class _FileListState extends State<FileList> {
                                             ),
                                           ),
                                         );
-                                      } );
+                                      });
+                                    },
+                                    context: context,
+                                    barrierDismissible: true,
+                                    barrierLabel: "111",
+                                  );
                                 },
-                                context: context,
-                                barrierDismissible: true,
-                                barrierLabel: "111",
-                              );
-                            },
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.share, color: Colors.white),
-                                Text("分享", style: TextStyle(color: Colors.white)),
-                              ],
-                            ))),
-                        Expanded(child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
-                            onPressed: () {
-                              final chosenIDs=chosenMap.keys.toList();
-                              http.post(Uri.parse(baseURl+'/favorite/add'),headers: {
-                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                              },body: jsonEncode({"ids":chosenIDs})).then((v){
-                                final data=jsonDecode(v.body)["data"]["result"];
-                                print(data);
-                              });
-                            },
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.star_outlined,
-                                  color: Colors.white,
-                                ),
-                                Text("收藏", style: TextStyle(color: Colors.white)),
-                              ],
-                            ))),
-                        Expanded(child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322),backgroundColor: Colors.red),
-                            onPressed: () {
-                              final chosenIDs=chosenMap.keys.toList();
-                              http.post(Uri.parse(baseURl+"/file/delete"),headers: {
-                                "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}",
-                              },body: jsonEncode({
-                                "ids":chosenIDs
-                              })).then((value){
-                                dynamic data=jsonDecode(value.body);
-                                if(data['data']['result']=='ok'){
-                                  print(111);
-                                  setState(() {
-                                    for(final item in chosenIDs){
-                                      visitor.visitee.getChild(item).file.delete();
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.share, color: Colors.white),
+                                    Text("分享", style: TextStyle(color: Colors.white)),
+                                  ],
+                                ))),
+                        Expanded(
+                            child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
+                                onPressed: () {
+                                  final chosenIDs = chosenMap.keys.toList();
+                                  http
+                                      .post(Uri.parse(baseURl + '/favorite/add'),
+                                          headers: {
+                                            "Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"
+                                          },
+                                          body: jsonEncode({"ids": chosenIDs}))
+                                      .then((v) {
+                                    final data = jsonDecode(v.body)["data"]["result"];
+                                    setState(() {
+                                      Navigator.pop(context);
+                                      chooseMode = false;
+                                    });
+                                    if (data == 'ok') {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                        content: Text("收藏成功"),
+                                        duration: Duration(milliseconds: 500),
+                                      ));
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                        content: Text("收藏失败"),
+                                        duration: Duration(milliseconds: 500),
+                                      ));
                                     }
-                                    visitor = visitor.buildChildren(files);
-                                    chooseMode=false;
-                                    Navigator.pop(context);
                                   });
-
-                                }
-
-                              });
-                            },
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.delete,
-                                  color: Colors.white,
-                                ),
-                                Text("删除", style: TextStyle(color: Colors.white)),
-                              ],
-                            ))),
-                        Expanded(child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
-                            onPressed: () {},
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.more_horiz,
-                                  color: Colors.white,
-                                ),
-                                Text("更多", style: TextStyle(color: Colors.white))
-                              ],
-                            )))
+                                },
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.star_outlined,
+                                      color: Colors.white,
+                                    ),
+                                    Text("收藏", style: TextStyle(color: Colors.white)),
+                                  ],
+                                ))),
+                        Expanded(
+                            child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                    side: BorderSide.none, primary: Color(0x2B196322), backgroundColor: Colors.red),
+                                onPressed: () {
+                                  final chosenIDs = chosenMap.keys.toList();
+                                  http
+                                      .post(Uri.parse(baseURl + "/file/delete"),
+                                          headers: {
+                                            "Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}",
+                                          },
+                                          body: jsonEncode({"ids": chosenIDs}))
+                                      .then((value) {
+                                    dynamic data = jsonDecode(value.body);
+                                    if (data['data']['result'] == 'ok') {
+                                      print(111);
+                                      setState(() {
+                                        for (final item in chosenIDs) {
+                                          visitor.visitee.getChild(item).file.delete();
+                                        }
+                                        visitor = visitor.buildChildren(files);
+                                        chooseMode = false;
+                                        Navigator.pop(context);
+                                      });
+                                    }
+                                  });
+                                },
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.delete,
+                                      color: Colors.white,
+                                    ),
+                                    Text("删除", style: TextStyle(color: Colors.white)),
+                                  ],
+                                ))),
+                        // Expanded(child: OutlinedButton(
+                        //     style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
+                        //     onPressed: () {},
+                        //     child: Column(
+                        //       mainAxisAlignment: MainAxisAlignment.center,
+                        //       children: [
+                        //         Icon(
+                        //           Icons.more_horiz,
+                        //           color: Colors.white,
+                        //         ),
+                        //         Text("更多", style: TextStyle(color: Colors.white))
+                        //       ],
+                        //     )))
                       ],
                     ),
                   );
@@ -697,7 +765,9 @@ class _FileListState extends State<FileList> {
                 setState(() {
                   visitor = visitor.moveTo(e.fileID);
                   if (!visitor.hasChild()) {
-                    http.get(Uri.parse(baseURl + "/disk/list/details")).then((res) {
+                    http
+                        .post(Uri.parse(baseURl + "/disk/list/details"), body: jsonEncode({"id": e.fileID}))
+                        .then((res) {
                       List<dynamic> t = jsonDecode(res.body);
                       var files = t.map((ele) => File.fromJson(ele)).toList();
                       setState(() {
@@ -722,8 +792,7 @@ class _FileListState extends State<FileList> {
                 children: [
                   Container(
                     margin: const EdgeInsets.only(right: 10),
-                    child:
-                        Icon(e.fileType == "file" ? Icons.insert_drive_file_sharp : Icons.folder),
+                    child: Icon(e.fileType == "file" ? Icons.insert_drive_file_sharp : Icons.folder),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,16 +802,12 @@ class _FileListState extends State<FileList> {
                       Row(
                         children: [
                           Text(
-                            getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)),
-                                needYear: true),
+                            getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)), needYear: true),
                             style: const TextStyle(color: Colors.grey, fontSize: 12),
                           ),
                           Container(
                             margin: const EdgeInsets.only(left: 10),
-                            child: Text(
-                                e.fileType == "file"
-                                    ? "${fileSize.toStringAsFixed(2)}$fileSizeExt"
-                                    : "",
+                            child: Text(e.fileType == "file" ? "${fileSize.toStringAsFixed(2)}$fileSizeExt" : "",
                                 style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           )
                         ],
@@ -785,7 +850,8 @@ class _FileListState extends State<FileList> {
         onWillPop: () {
           if (chooseMode) {
             setState(() {
-              store.chooseMode.value=false;
+              store.chooseMode.value = false;
+              store.chooseMode.refresh();
               chooseMode = false;
               chosenMap = {};
             });

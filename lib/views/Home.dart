@@ -1,4 +1,7 @@
+import 'dart:io' as io;
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:netdisk/TransferIsolate.dart';
 import 'package:netdisk/views/AccountSettings.dart';
 import 'package:netdisk/views/DownloadList.dart';
 import 'package:netdisk/views/FavoriteList.dart';
@@ -10,9 +13,12 @@ import 'package:netdisk/views/User.dart';
 import '../GlobalClass.dart' show NavigatorKey;
 import 'FileDetail.dart';
 import 'FileList.dart';
+import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
 import '../Store.dart' show Store;
-
+import 'package:file_picker/file_picker.dart';
+import 'dart:convert';
+import 'package:intl/intl.dart';
 class DiskRootApp extends StatelessWidget {
   const DiskRootApp({Key? key}) : super(key: key);
 
@@ -23,7 +29,6 @@ class DiskRootApp extends StatelessWidget {
       navigatorKey: NavigatorKey.key,
       title: 'Diana Disk',
       routes: {
-        '/': (BuildContext context) => const DiskApp(),
         '/download': (BuildContext context) => const DownloadList(),
         '/recycle': (BuildContext context) => const RecycleList(),
         '/favorite': (BuildContext context) => const FavoriteList(),
@@ -31,12 +36,17 @@ class DiskRootApp extends StatelessWidget {
         '/settings/account': (BuildContext context) => const AccountSettingsPage(),
         '/settings/other': (BuildContext context) => const OtherSettingsPage()
       },
+      supportedLocales: [Locale('en')],
       onGenerateRoute: (settings) {
         if (settings.name == '/file') {
           return MaterialPageRoute<File>(builder: (context) {
             return FileDetail(argv: settings.arguments as dynamic);
           });
-        } else {
+        } else if(settings.name=="/"){
+          return MaterialPageRoute<File>(builder: (context) {
+            return DiskApp(initFile: settings.arguments==null?null:(settings.arguments as dynamic)['file']);
+          });
+        }else{
           return null;
         }
       },
@@ -46,7 +56,8 @@ class DiskRootApp extends StatelessWidget {
 }
 
 class DiskApp extends StatefulWidget {
-  const DiskApp({Key? key}) : super(key: key);
+  final File? initFile;
+  const DiskApp({Key? key,this.initFile}) : super(key: key);
 
   @override
   State<DiskApp> createState() => _DiskAppState();
@@ -90,21 +101,32 @@ class _DiskAppState extends State<DiskApp> {
                                   children: [
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(side: BorderSide.none),
-                                      onPressed: () {},
+                                      onPressed: () {
+
+                                      },
                                       child: Column(
                                         children: [Icon(Icons.image_outlined,size: 40,), Text("上传图片",style: TextStyle(color: Colors.black),)],
                                       ),
                                     ),
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(side: BorderSide.none),
-                                      onPressed: () {},
+                                      onPressed: () {
+
+                                      },
                                       child: Column(
                                         children: [Icon(Icons.text_snippet,size: 40,), Text("上传文档",style: TextStyle(color: Colors.black),)],
                                       ),
                                     ),
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(side: BorderSide.none),
-                                      onPressed: () {},
+                                      onPressed: ()async {
+                                        var result=await FilePicker.platform.pickFiles();
+                                        if(result!=null){
+                                          io.File file=io.File(result.files.single.path!);
+                                          TransferUpload uploader=TransferUpload(file);
+                                          uploader.start();
+                                        }
+                                      },
                                       child: Column(
                                         children: [Icon(Icons.upload_file_outlined,size: 40,), Text("上传其他",style: TextStyle(color: Colors.black),)],
                                       ),
@@ -116,7 +138,8 @@ class _DiskAppState extends State<DiskApp> {
                                   children: [
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(side: BorderSide.none),
-                                      onPressed: () {},
+                                      onPressed: () {
+                                      },
                                       child: Column(
                                         children: [Icon(Icons.create_new_folder,size: 40,), Text("新建文件夹",style: TextStyle(color: Colors.black),)],
                                       ),
@@ -182,6 +205,7 @@ class _DiskAppState extends State<DiskApp> {
                     child: FileList(
                   backToParentCallback: onBack,
                   onChangeNavi: onChangeNavi,
+                      initFile: widget.initFile,
                 )),
               ],
             )
@@ -208,6 +232,7 @@ class _DiskAppState extends State<DiskApp> {
           if (index != _currentIndex) {
             shouldFileBottomSheetClose();
             setState(() {
+              store.chooseMode.value = false;
               _currentIndex = index;
             });
           }
@@ -215,6 +240,7 @@ class _DiskAppState extends State<DiskApp> {
       ),
     );
   }
+
 }
 
 class SearchBar extends StatefulWidget {

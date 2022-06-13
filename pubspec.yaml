@@ -41,6 +41,10 @@ dependencies:
   share_plus: ^4.0.7
   images_picker: ^1.2.11
   dio: ^4.0.6
+  file_picker: ^4.6.1
+  crypto: ^3.0.2
+  date_format: ^2.0.6
+  intl: ^0.17.0
 
 dev_dependencies:
   flutter_test:
