@@ -2,13 +2,14 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:http/http.dart' as http;
 
-class TransferUpload {
+class UploadIsolate {
   ReceivePort port = ReceivePort();
   late SendPort sender;
   late Isolate isolate;
   File file;
+  Function(int sentChunk, int tot)? onProcess;
 
-  TransferUpload(this.file) {
+  UploadIsolate(this.file) {
     port.listen((message) {
       String msg = message['msg'];
       switch (msg) {
@@ -19,18 +20,23 @@ class TransferUpload {
         case "shouldContinue":
           sender.send({"msg":"ok"});
           break;
+        case "process":
+          if(onProcess!=null){
+            onProcess!(message['data']['ok'],message['data']['size']);
+          }
       }
     });
   }
 
   start({Function(int sentChunk, int tot)? onProcess}) async {
+    this.onProcess=onProcess;
     String uploadID;
     var filename = file.path
-        .split('/|\\')
+        .split(RegExp("/|\\\\"))
         .last;
     var res = await http.post(Uri.parse("https://oss.rosmontis.top/passageOther/$filename?uploads"));
     uploadID = RegExp("<UploadId>(.*)<\/UploadId>").firstMatch(res.body)!.group(1)!;
-    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename,"onProcess":onProcess});
+    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename});
   }
 
 }
@@ -39,7 +45,7 @@ uploadFunc(message) async {
   SendPort sendPort=message['port'];
   File file=message['file'];
   String filename=message['filename'];
-  Function(int sentChunk, int tot)? onProcess=message['onProcess'];
+
   String uploadID=message['id'];
   var isoRecPort = ReceivePort();
   sendPort.send({"msg": "connect", "data": isoRecPort.sendPort});
@@ -63,16 +69,15 @@ uploadFunc(message) async {
               Uri.parse("https://oss.rosmontis.top/passageOther/$filename?partNumber=$nowPart&uploadId=$uploadID"),
               body: buffer);
           check[nowPart] = res.headers['etag'];
-          if (onProcess != null) {
-            onProcess(nowPart, size);
-          }
           nowPart++;
           print(111);
           print("byteread$start");
           start += chunkSize;
           print("code${res.statusCode}");
           sendPort.send({"msg":"shouldContinue"});
+          sendPort.send({"msg":"process","data":{"ok":start,"size":size}});
         } else {
+          print(111);
           String checker = "";
           checker = check.entries.toList().map((e) =>
           '''
@@ -86,6 +91,7 @@ uploadFunc(message) async {
           var res = await http.post(
               Uri.parse("https://oss.rosmontis.top/passageOther/$filename?uploadId=$uploadID"), body: checker);
           print("complate${res.statusCode}");
+          Isolate.exit(sendPort,{"msg":"shouldContinue"});
         }
         break;
       case "":

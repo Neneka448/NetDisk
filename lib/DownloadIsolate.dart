@@ -1,0 +1,125 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:isolate';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart' as path_provider;
+
+Map<String,int> fileMap={};
+
+class DownloadIsolate {
+  ReceivePort port = ReceivePort();
+  late SendPort sender;
+  late Isolate isolate;
+  late File file;
+  late Directory downloadDirectory;
+  String url;
+  late String fileName;
+  late Function(int recChunk, int tot)? onProcess;
+  late Function(int size)? onInit;
+  DownloadIsolate(this.url) {
+    fileName = url.split(RegExp("/|\\\\")).last;
+    port.listen((message) {
+      String msg = message['msg'];
+      switch (msg) {
+        case "connect":
+          sender = message['data'];
+          sender.send({"msg": "ok", "data": file});
+          break;
+        case "shouldContinue":
+          sender.send({"msg": "ok"});
+          break;
+        case "downloadFinished":
+          port.close();
+          break;
+        case "init":
+          if(onInit!=null){
+            onInit!(message["data"]);
+          }
+          break;
+        case "process":
+          if(onProcess!=null){
+            onProcess!(message["data"]["rec"],message["data"]["size"]);
+          }
+          break;
+      }
+    });
+  }
+
+  start({Function(int recChunk, int tot)? onProcess_,Function(int size)? onInit_}) async {
+    if(onProcess_!=null){
+      onProcess=onProcess_;
+    }
+    if(onInit_!=null){
+      onInit=onInit_;
+    }
+    if(Platform.isAndroid){
+      final cacheDirectory=await path_provider.getTemporaryDirectory();
+      downloadDirectory=await cacheDirectory.createTemp("downloads");
+    }else if(Platform.isWindows){
+      downloadDirectory=(await path_provider.getDownloadsDirectory())!;
+    }
+    file=File(downloadDirectory.path+'/$fileName');
+    isolate = await Isolate.spawn(downloadFunc,
+        {"port": port.sendPort, "url": url, "file": file,"directory":downloadDirectory, "filename": fileName});
+  }
+
+}
+
+downloadFunc(message)async {
+  SendPort sender=message['port'];
+  ReceivePort port=ReceivePort();
+  String url=message['url'];
+  File file=message['file'];
+  Directory dir=message['directory'];
+  String filename=message['filename'];
+  sender.send({"msg":"connect","data":port.sendPort});
+  var fio=await file.open(mode: FileMode.append);
+  saveChunk(List<int> content)async{
+    await fio.writeFrom(content);
+  }
+  int size=-1;
+  int start=0;
+  int chunkSize=100*1024;
+  port.listen((message) async {
+    String msg=message["msg"];
+    switch(msg){
+      case "ok":
+        fio.setPosition(start);
+        if(start==0){
+          int end=chunkSize;
+          var res=await http.get(Uri.parse(url),headers: {
+            "Range":"bytes=$start-$end"
+          });
+          size=int.parse(res.headers['content-range']!.split('/').last);
+          print(size);
+          var bytesRead=int.parse(res.headers['content-length']!);
+          print(res.statusCode);
+          await saveChunk(res.bodyBytes);
+          start=start+bytesRead;
+          fileMap[url]=start;
+          sender.send({"msg":"init","data":size});
+        }else{
+          int end=start+chunkSize>=size?size-1:start+chunkSize-1;
+          if(start>=size){
+            print("ok");
+            port.close();
+            Isolate.exit(sender,{"msg":"downloadFinished"});
+          }
+          var res=await http.get(Uri.parse(url),headers: {
+            "Range":"bytes=$start-$end"
+          });
+          print(res.statusCode);
+          start=end+1;
+          await saveChunk(res.bodyBytes);
+          fileMap[url]=start;
+          sender.send({"msg":"process","data":{"rec":start,"size":size}});
+        }
+        print(start);
+
+        sender.send({"msg":"shouldContinue"});
+        break;
+
+    }
+  });
+
+}

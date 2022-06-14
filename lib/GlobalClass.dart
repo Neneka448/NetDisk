@@ -72,3 +72,10 @@ String getFormatTime(DateTime time,{bool needYear=false}){
 class NavigatorKey{
   static final key=GlobalKey<NavigatorState>();
 }
+
+class FileDescriptor{
+  String name;
+  int rec=0;
+  int size=1;
+  FileDescriptor(this.name);
+}

@@ -6,12 +6,12 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:netdisk/Download.dart';
 import 'package:path_provider/path_provider.dart';
+import '../DownloadIsolate.dart';
 import '../GlobalVariables.dart' show baseURl;
-import '../GlobalClass.dart' show NavigatorKey, getFormatTime;
+import '../GlobalClass.dart' show FileDescriptor, NavigatorKey, getFormatTime;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import '../Store.dart';
-
 class File {
   final String fileName;
   final String fileSize;
@@ -276,20 +276,17 @@ class _FileListState extends State<FileList> {
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () async {
-                                  Directory? url;
-                                  if (Platform.isAndroid) {
-                                    url = await getApplicationDocumentsDirectory();
-                                  } else if (Platform.isWindows) {
-                                    url = await getDownloadsDirectory();
-                                  }
-                                  downloadWithChunks(
-                                      'https://oss.rosmontis.top/passageOther/diana1.jpg', url!.path + '/1.temp',
-                                      onReceiveProgress: (received, total) {
-                                    if (total != -1) {
-                                      print("${(received / total * 100).floor()}%");
-                                    }
+                                  var t=DownloadIsolate("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/773f54a85440b95c458a7da4c9a0dc008050af9c.gif");
+                                  t.start(onInit_: (size){
+                                    store.downloadList[e.fileName]=FileDescriptor(e.fileName);
+                                    store.downloadList[e.fileName]!.size=size;
+                                    store.downloadList.refresh();
+                                  },onProcess_: (ok,tot){
+                                    store.downloadList[e.fileName]!.rec=ok;
+                                    store.downloadList.refresh();
                                   });
-                                },
+
+                                  },
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [

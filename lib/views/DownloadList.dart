@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
+
+import '../Store.dart';
 
 class DownloadList extends StatefulWidget {
   const DownloadList({Key? key}) : super(key: key);
@@ -19,7 +22,7 @@ class _DownloadListState extends State<DownloadList> {
     super.initState();
     (() async {
       var dir = await path_provider.getTemporaryDirectory();
-      dir=await dir.createTemp("download");
+      dir = await dir.createTemp("download");
       files = dir.listSync(recursive: false);
     })();
   }
@@ -58,9 +61,7 @@ class _DownloadListState extends State<DownloadList> {
                         child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
                                 side: BorderSide.none,
-                                backgroundColor: pageMode == 0
-                                    ? Colors.white
-                                    : Color.fromARGB(255, 187, 187, 187)),
+                                backgroundColor: pageMode == 0 ? Colors.white : Color.fromARGB(255, 187, 187, 187)),
                             onPressed: () {
                               setState(() {
                                 pageMode = 0;
@@ -76,9 +77,7 @@ class _DownloadListState extends State<DownloadList> {
                         child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
                                 side: BorderSide.none,
-                                backgroundColor: pageMode == 1
-                                    ? Colors.white
-                                    : Color.fromARGB(255, 187, 187, 187)),
+                                backgroundColor: pageMode == 1 ? Colors.white : Color.fromARGB(255, 187, 187, 187)),
                             onPressed: () {
                               setState(() {
                                 pageMode = 1;
@@ -94,7 +93,7 @@ class _DownloadListState extends State<DownloadList> {
                 ),
               )),
           Text("下载中"),
-          DownloadBox(files: files)
+          pageMode==0?DownloadBox():UploadBox()
         ]),
       ),
     );
@@ -102,9 +101,7 @@ class _DownloadListState extends State<DownloadList> {
 }
 
 class DownloadBox extends StatefulWidget {
-  List<FileSystemEntity> files;
-
-  DownloadBox({Key? key, required this.files}) : super(key: key);
+  const DownloadBox({Key? key}) : super(key: key);
 
   @override
   State<DownloadBox> createState() => _DownloadBoxState();
@@ -113,14 +110,48 @@ class DownloadBox extends StatefulWidget {
 class _DownloadBoxState extends State<DownloadBox> {
   @override
   Widget build(BuildContext context) {
+    final Store store = Get.find();
     return Container(
-      child: widget.files.isNotEmpty?ListView.builder(
-        shrinkWrap: true,
-        itemCount: widget.files.length,
-        itemBuilder: (BuildContext context, int index) {
-          return SizedBox(height: 60, child: Text("${widget.files[index].path}"));
-        },
-      ):Text("No File"),
+      child: Obx(() {
+        return store.downloadList.isNotEmpty
+            ? ListView.builder(
+                shrinkWrap: true,
+                itemCount: store.downloadList.length,
+                itemBuilder: (BuildContext context, int index) {
+                  var p = store.downloadList.entries.toList();
+                  return SizedBox(height: 60, child: Text("${p[index].value.rec/p[index].value.size}"));
+                },
+              )
+            : Text("No File");
+      }),
+    );
+  }
+}
+
+class UploadBox extends StatefulWidget {
+  const UploadBox({Key? key}) : super(key: key);
+
+  @override
+  State<UploadBox> createState() => _UploadBoxState();
+}
+
+class _UploadBoxState extends State<UploadBox> {
+  @override
+  Widget build(BuildContext context) {
+    final Store store = Get.find();
+    return Container(
+      child: Obx(() {
+        return store.uploadList.isNotEmpty
+            ? ListView.builder(
+          shrinkWrap: true,
+          itemCount: store.uploadList.length,
+          itemBuilder: (BuildContext context, int index) {
+            var p = store.uploadList.entries.toList();
+            return SizedBox(height: 60, child: Text("${p[index].value.rec/p[index].value.size}"));
+          },
+        )
+            : Text("No File");
+      }),
     );
   }
 }

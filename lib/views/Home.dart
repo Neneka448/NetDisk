@@ -1,7 +1,7 @@
 import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:netdisk/TransferIsolate.dart';
+import 'package:netdisk/UploadIsolate.dart';
 import 'package:netdisk/views/AccountSettings.dart';
 import 'package:netdisk/views/DownloadList.dart';
 import 'package:netdisk/views/FavoriteList.dart';
@@ -10,7 +10,7 @@ import 'package:netdisk/views/RecycleList.dart';
 import 'package:netdisk/views/UserInfoSettings.dart';
 import 'package:netdisk/views/SharePage.dart';
 import 'package:netdisk/views/User.dart';
-import '../GlobalClass.dart' show NavigatorKey;
+import '../GlobalClass.dart' show FileDescriptor, NavigatorKey;
 import 'FileDetail.dart';
 import 'FileList.dart';
 import 'package:http/http.dart' as http;
@@ -123,8 +123,16 @@ class _DiskAppState extends State<DiskApp> {
                                         var result=await FilePicker.platform.pickFiles();
                                         if(result!=null){
                                           io.File file=io.File(result.files.single.path!);
-                                          TransferUpload uploader=TransferUpload(file);
-                                          uploader.start();
+                                          String filename=result.files.single.path!.split(RegExp("/\\\\")).last;
+                                          UploadIsolate uploader=UploadIsolate(file);
+                                          uploader.start(onProcess: (ok,size){
+                                            if(store.uploadList[filename]==null){
+                                              store.uploadList[filename]=FileDescriptor(filename);
+                                            }
+                                            store.uploadList[filename]!.size=size;
+                                            store.uploadList[filename]!.rec=ok;
+                                            store.uploadList.refresh();
+                                          });
                                         }
                                       },
                                       child: Column(
