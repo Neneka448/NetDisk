@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart' as path_provider;
 
@@ -16,9 +17,10 @@ class DownloadIsolate {
   late String fileName;
   late Function(int recChunk, int tot)? onProcess;
   late Function(int size)? onInit;
+  late Function(String url) onDone;
   DownloadIsolate(this.url) {
     fileName = url.split(RegExp("/|\\\\")).last;
-    port.listen((message) {
+    port.listen((message) async {
       String msg = message['msg'];
       switch (msg) {
         case "connect":
@@ -29,6 +31,17 @@ class DownloadIsolate {
           sender.send({"msg": "ok"});
           break;
         case "downloadFinished":
+          var s=WidgetsFlutterBinding.ensureInitialized();
+          if(Platform.isAndroid){
+            var docDir=(await path_provider.getExternalStorageDirectory())!;
+            await file.copy(docDir.path+'/$fileName');
+            await file.delete();
+            onDone(docDir.path+'/$fileName');
+          }else{
+            onDone(file.path);
+          }
+
+
           port.close();
           break;
         case "init":
@@ -45,12 +58,15 @@ class DownloadIsolate {
     });
   }
 
-  start({Function(int recChunk, int tot)? onProcess_,Function(int size)? onInit_}) async {
+  start({Function(int recChunk, int tot)? onProcess_,Function(int size)? onInit_,Function(String url)? onDone_}) async {
     if(onProcess_!=null){
       onProcess=onProcess_;
     }
     if(onInit_!=null){
       onInit=onInit_;
+    }
+    if(onDone_!=null){
+      onDone=onDone_;
     }
     if(Platform.isAndroid){
       final cacheDirectory=await path_provider.getTemporaryDirectory();
@@ -58,7 +74,11 @@ class DownloadIsolate {
     }else if(Platform.isWindows){
       downloadDirectory=(await path_provider.getDownloadsDirectory())!;
     }
-    file=File(downloadDirectory.path+'/$fileName');
+    if(Platform.isWindows){
+      file=File(downloadDirectory.path+'\\$fileName');
+    }else{
+      file=File(downloadDirectory.path+'/$fileName');
+    }
     isolate = await Isolate.spawn(downloadFunc,
         {"port": port.sendPort, "url": url, "file": file,"directory":downloadDirectory, "filename": fileName});
   }

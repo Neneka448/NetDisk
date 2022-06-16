@@ -6,9 +6,11 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:netdisk/Download.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xml2json/xml2json.dart';
 import '../DownloadIsolate.dart';
-import '../GlobalVariables.dart' show baseURl;
-import '../GlobalClass.dart' show FileDescriptor, NavigatorKey, getFormatTime;
+import '../GlobalVariables.dart' show baseURl, remoteUrl;
+import '../GlobalClass.dart' show FileDescriptor, FileState, NavigatorKey, User, getFormatTime;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import '../Store.dart';
@@ -114,14 +116,15 @@ class FileListTreeVisitor {
     return this;
   }
 
-  String getFilePathToRoot(String fileID) {
-    var s = <String>[];
-    var now = FileListTreeVisitor(visitee.getChild(fileID));
-    while (!now.isRootFile()) {
-      s.add(now.visitee.file.fileName);
-      now = now.returnToParent();
-    }
-    return s.reversed.join("<");
+  String getFilePathToRoot(String fileID,String token) {
+    // var s = <String>[];
+    // var now = FileListTreeVisitor(visitee.getChild(fileID));
+    // while (!now.isRootFile()) {
+    //   s.add(now.visitee.file.fileName);
+    //   now = now.returnToParent();
+    // }
+    // return s.reversed.join("<");
+    return fileID.replaceAll(RegExp('.*/$token/'),"/");
   }
 
   File getFile() {
@@ -156,7 +159,6 @@ class FileList extends StatefulWidget {
 
   const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile})
       : super(key: key);
-
   @override
   State<FileList> createState() => _FileListState();
 }
@@ -168,6 +170,7 @@ class _FileListState extends State<FileList> {
   var shareFileValidDays = 30;
   var shareFilePsw = '';
   List<File> files = [];
+
   FileListTree fileTree = FileListTree(File(
       fileName: "_ROOT",
       fileID: "-1",
@@ -178,6 +181,7 @@ class _FileListState extends State<FileList> {
   late FileListTreeVisitor visitor = FileListTreeVisitor(fileTree);
 
   void getFileListWhenInit() async {
+    store.nowDir.value=[store.token.value];
     if (widget.initFile != null) {
       final res = await http.post(Uri.parse(baseURl + "/disk/list/details"),
           headers: {"Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"},
@@ -188,19 +192,77 @@ class _FileListState extends State<FileList> {
         visitor = visitor.buildChildren(files);
       });
     } else {
-      final res = await http.get(Uri.parse(baseURl + "/disk/list"));
-      List<dynamic> t = jsonDecode(res.body);
-      files = t.map((ele) => File.fromJson(ele)).toList();
-      setState(() {
-        visitor = visitor.buildChildren(files);
-      });
+      final res = await http.get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.token.value}/&delimiter=/"));
+      if(res.statusCode==200){
+        var transformer=Xml2Json();
+        transformer.parse(res.body);
+        var json = jsonDecode(transformer.toParker());
+        if(json['ListBucketResult']['CommonPrefixes']!=null){
+          if(json['ListBucketResult']['CommonPrefixes'] is! List){
+            var ele=json['ListBucketResult']['CommonPrefixes'];
+            final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+            files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+          }else{
+            json['ListBucketResult']['CommonPrefixes'].forEach((ele){
+              final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+              files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+            });
+          }
+        }
+        if(json['ListBucketResult']['Contents']!=null){
+          if(json['ListBucketResult']['Contents'] is! List){
+            var ele=json['ListBucketResult']['Contents'];
+            print(ele);
+            final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+            files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+          }else{
+            print(json['ListBucketResult']['Contents']);
+            json['ListBucketResult']['Contents'].forEach((ele){
+              if(ele['Key'].endsWith('/')){
+                return;
+              }
+              final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+              files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+            });
+          }
+        }
+        setState(() {
+          print(files);
+          visitor = visitor.buildChildren(files);
+        });
+      }
     }
   }
 
   @override
   void initState() {
     super.initState();
-    getFileListWhenInit();
+    if (store.loginState.value == false) {
+      SharedPreferences.getInstance().then((preference) {
+        var token = preference.getString('token');
+        if (token != null) {
+          http.get(Uri.parse(remoteUrl + "/passageOther/user/$token")).then((response) {
+            if (response.statusCode == 200) {
+              store.token.value = token;
+              store.changeLoginState(true);
+              http.get(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
+                  .then((res){
+                dynamic rawData = jsonDecode(res.body);
+                print(rawData);
+                store.setUser(User.fromJson(rawData));
+                store.user.refresh();
+              });
+              getFileListWhenInit();
+            } else {
+              preference.remove('token');
+            }
+
+          });
+        }
+      });
+    }else{
+      getFileListWhenInit();
+    }
     widget.onChangeNavi(() {
       if (chooseMode == true) {
         Navigator.pop(context);
@@ -225,6 +287,12 @@ class _FileListState extends State<FileList> {
           chooseMode = false;
         });
       } else {
+        print(store.nowDir);
+        if(store.nowDir.length>1){
+          store.nowDir.remove(store.nowDir.last);
+          store.nowDir.refresh();
+        }
+        print(store.nowDir);
         setState(() {
           visitor = visitor.returnToParent();
         });
@@ -276,13 +344,23 @@ class _FileListState extends State<FileList> {
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () async {
-                                  var t=DownloadIsolate("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/773f54a85440b95c458a7da4c9a0dc008050af9c.gif");
+                                  final url=remoteUrl+'/'+e.fileID;
+                                  var t=DownloadIsolate(url);
                                   t.start(onInit_: (size){
-                                    store.downloadList[e.fileName]=FileDescriptor(e.fileName);
+                                    store.downloadList[e.fileName]=FileDescriptor(e.fileName,url,DateTime.now().millisecondsSinceEpoch);
                                     store.downloadList[e.fileName]!.size=size;
                                     store.downloadList.refresh();
                                   },onProcess_: (ok,tot){
+                                    if(store.downloadList[e.fileName]!.state!=FileState.downloading){
+                                      store.downloadList[e.fileName]!.state=FileState.downloading;
+                                    }
                                     store.downloadList[e.fileName]!.rec=ok;
+                                    store.saveToDisk();
+                                    store.downloadList.refresh();
+                                  },onDone_: (url){
+                                    store.downloadList[e.fileName]!.state=FileState.done;
+                                    store.downloadList[e.fileName]!.url=url;
+                                    store.saveToDisk();
                                     store.downloadList.refresh();
                                   });
 
@@ -761,21 +839,62 @@ class _FileListState extends State<FileList> {
               if (e.fileType == "folder") {
                 setState(() {
                   visitor = visitor.moveTo(e.fileID);
+                  store.nowDir.add(e.fileName);
+                  print(store.nowDir);
+
                   if (!visitor.hasChild()) {
+                    print(112211);
                     http
-                        .post(Uri.parse(baseURl + "/disk/list/details"), body: jsonEncode({"id": e.fileID}))
+                        .get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.nowDir.join('/')}/&delimiter=/"))
                         .then((res) {
-                      List<dynamic> t = jsonDecode(res.body);
-                      var files = t.map((ele) => File.fromJson(ele)).toList();
-                      setState(() {
-                        visitor = visitor.buildChildren(files);
-                      });
+                      if(res.statusCode==200){
+                        var transformer=Xml2Json();
+                        files=[];
+                        transformer.parse(res.body);
+                        var json = jsonDecode(transformer.toParker());
+                        if(json['ListBucketResult']['CommonPrefixes']!=null){
+                          if(json['ListBucketResult']['CommonPrefixes'] is! List){
+                            var ele=json['ListBucketResult']['CommonPrefixes'];
+                            final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+                            files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+
+                          }else{
+                            json['ListBucketResult']['CommonPrefixes'].forEach((ele){
+                              final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+                              files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+                            });
+                          }
+
+                        }
+                        if(json['ListBucketResult']['Contents']!=null){
+                          if(json['ListBucketResult']['Contents'] is! List){
+                            var ele=json['ListBucketResult']['Contents'];
+                            print(ele);
+                            final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+                            files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+                          }else{
+                            print(json['ListBucketResult']['Contents']);
+                            json['ListBucketResult']['Contents'].forEach((ele){
+                              if((ele['Key'] as String).endsWith('/')){
+                                return;
+                              }
+                              final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+                              files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+                            });
+                          }
+                        }
+
+                        store.nowDir.refresh();
+                        setState(() {
+                          visitor = visitor.buildChildren(files);
+                        });
+                      }
                     });
                   }
                 });
               } else if (e.fileType == "file") {
                 Navigator.pushNamed(context, "/file",
-                    arguments: {'file': e, 'location': visitor.getFilePathToRoot(e.fileID)});
+                    arguments: {'file': e, 'location': visitor.getFilePathToRoot(e.fileID,store.token.value)});
               }
             }
           },
@@ -796,7 +915,8 @@ class _FileListState extends State<FileList> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(e.fileName, style: const TextStyle(color: Colors.black, fontSize: 16)),
-                      Row(
+                      e.fileType == "file" ?Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
                             getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)), needYear: true),
@@ -808,7 +928,7 @@ class _FileListState extends State<FileList> {
                                 style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           )
                         ],
-                      )
+                      ):Container()
                     ],
                   ),
                 ],

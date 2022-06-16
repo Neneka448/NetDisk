@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import '../GlobalVariables.dart' show baseURl;
+import '../GlobalVariables.dart' show baseURl, remoteUrl;
 import '../GlobalClass.dart' show RawResponse, Token, User;
 import '../Store.dart' show Store;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,18 +33,15 @@ class _UserPageState extends State<UserPage> {
       SharedPreferences.getInstance().then((preference) {
         var token = preference.getString('token');
         if (token != null) {
-          http.post(Uri.parse(baseURl + "/auth/check"),
-              headers: {'Authorization': 'Basic $token'}).then((response) {
-            var rawRes = jsonDecode(response.body);
-            var res = RawResponse(
-                status: rawRes['status'], desc: rawRes['desc'], data: null);
-            if (res.status == 'ok') {
+          http.get(Uri.parse(remoteUrl + "/passageOther/user/$token")).then((response) {
+            if (response.statusCode == 200) {
               store.token.value = token;
               store.changeLoginState(true);
               _initUser();
             } else {
               preference.remove('token');
             }
+
           });
         }
       });
@@ -63,11 +61,17 @@ class _UserPageState extends State<UserPage> {
   }
 
   void _initUser() {
-    http.get(Uri.parse(baseURl + "/user/info"),
-        headers: {'Authorization': 'Basic ${store.token.value}'}).then((res) {
-      dynamic rawData = jsonDecode(res.body)['data'];
+    http.get(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
+        .then((res){
+      dynamic rawData = jsonDecode(res.body);
+      print(rawData);
       store.setUser(User.fromJson(rawData));
     });
+    // http.get(Uri.parse(baseURl + "/user/info"),
+    //     headers: {'Authorization': 'Basic ${store.token.value}'}).then((res) {
+    //   dynamic rawData = jsonDecode(res.body)['data'];
+    //   store.setUser(User.fromJson(rawData));
+    // });
   }
 }
 
@@ -87,7 +91,9 @@ class _UserPageNotLoginState extends State<UserPageNotLogin> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   String _account = '';
   String _psw = '';
-
+  String _repeatPsw='';
+  String _nickname="";
+  int mode=0;
   @override
   Widget build(BuildContext context) {
     final Store store = Get.find();
@@ -102,37 +108,117 @@ class _UserPageNotLoginState extends State<UserPageNotLogin> {
                 decoration: const InputDecoration(hintText: "Account"),
                 onSaved: (v) => _account = v ?? '',
               ),
+              mode==1?TextFormField(
+                decoration: const InputDecoration(hintText: "Nickname"),
+                onSaved: (v) => _account = v ?? '',
+                onChanged: (v)=>_nickname=v,
+              ):Container(),
               TextFormField(
                 decoration: const InputDecoration(hintText: "Password"),
+                onChanged: (v){_psw=v;},
+                obscureText: true,
                 onSaved: (v) => _psw = v ?? '',
-              )
+              ),
+              mode==0?Container():TextFormField(
+                decoration: _psw==_repeatPsw?const InputDecoration(
+                    hintText: "Repeat Password",
+                ):const InputDecoration(
+                  hintText: "Repeat Password",
+                  errorText: "与输入密码不一致"
+                ),
+                obscureText: true,
+                onChanged: (v){setState(() {
+                  _repeatPsw=v;
+                });},
+                onSaved: (v) => _repeatPsw = v ?? '',
+              ),
             ],
           ),
         ),
-        ElevatedButton(
-            onPressed: () {
-              _formKey.currentState?.save();
-              http.post(Uri.parse(baseURl + "/auth/login"),
-                  body: {"acc": _account, "psw": _psw}).then((res) {
-                dynamic rawObj = jsonDecode(res.body);
-                var rawRes = RawResponse<Token>(
-                    status: rawObj['status'],
-                    desc: rawObj['desc'],
-                    data: Token.fromJson(rawObj['data']));
-                if (rawRes.status == 'ok') {
-                  widget.setLogin(true);
-                  store.token.value = rawRes.data.token;
-                  store.changeLoginState(true);
-                  widget.initUser();
-                  SharedPreferences.getInstance().then(
-                      (value) => value.setString('token', rawRes.data.token));
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(rawRes.data.token),
-                  ));
-                }
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            mode==0?TextButton(onPressed: (){
+              setState(() {
+                mode=1;
               });
-            },
-            child: const Text("校验"))
+            }, child: Text("转到注册")):TextButton(onPressed: (){
+              setState(() {
+                mode=0;
+              });
+            }, child: Text("转到登录")),
+            ElevatedButton(
+                onPressed: () async{
+                  _formKey.currentState?.save();
+                  if(mode==0){
+                    final id=md5.convert(utf8.encode(_account+":"+_psw)).toString();
+                    var res=await http.get(Uri.parse(remoteUrl+"/passageOther/user/$id"));
+                    if(res.statusCode==404){
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text("登录失败,错误码${res.statusCode}"),
+                      ));
+                    }else if(res.statusCode==200){
+                      widget.setLogin(true);
+                      store.token.value = id;
+                      store.changeLoginState(true);
+                      widget.initUser();
+                      SharedPreferences.getInstance().then(
+                              (value) => value.setString('token', id));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text("登陆成功"),
+                      ));
+                    }
+                  }else{
+                    if(_psw==_repeatPsw){
+                      final id=md5.convert(utf8.encode(_account+":"+_psw)).toString();
+                      var res=await http.put(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/$id"),
+                      body: jsonEncode({
+                        "user_id":id,
+                        "user_name":_account,
+                        "nickname":_nickname,
+                        "max_space":1024,
+                        "used_space":0,
+                        "avatar":"https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/1121.jpg"
+                      }));
+                      if(res.statusCode==200){
+                        widget.setLogin(true);
+                        store.token.value = id;
+                        store.changeLoginState(true);
+                        widget.initUser();
+                        SharedPreferences.getInstance().then(
+                                (value) => value.setString('token', id));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text("注册成功"),
+                        ));
+                      }else{
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text("注册失败,错误码:${res.statusCode}"),
+                        ));
+                      }
+                    }
+                    //http.put("");
+                  }
+                  // http.post(Uri.parse(baseURl + "/auth/login"),
+                  //     body: {"acc": _account, "psw": _psw}).then((res) {
+                  //   dynamic rawObj = jsonDecode(res.body);
+                  //   var rawRes = RawResponse<Token>(
+                  //       status: rawObj['status'],
+                  //       desc: rawObj['desc'],
+                  //       data: Token.fromJson(rawObj['data']));
+                  //   if (rawRes.status == 'ok') {
+                  //     widget.setLogin(true);
+                  //     store.token.value = rawRes.data.token;
+                  //     store.changeLoginState(true);
+                  //     widget.initUser();
+                  //     SharedPreferences.getInstance().then(
+                  //             (value) => value.setString('token', rawRes.data.token));
+                  //
+                  //   }
+                  // });
+                },
+                child: mode==0?const Text("登录"):const Text("注册"))
+          ],
+        )
       ]),
     );
   }

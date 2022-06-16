@@ -2,14 +2,18 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:http/http.dart' as http;
 
+import 'GlobalVariables.dart';
+
 class UploadIsolate {
   ReceivePort port = ReceivePort();
   late SendPort sender;
   late Isolate isolate;
+  late String nowDir;
   File file;
   Function(int sentChunk, int tot)? onProcess;
-
-  UploadIsolate(this.file) {
+  Function? onFinish;
+  UploadIsolate(this.file,List<String> dir) {
+    nowDir=dir.join('/');
     port.listen((message) {
       String msg = message['msg'];
       switch (msg) {
@@ -24,19 +28,29 @@ class UploadIsolate {
           if(onProcess!=null){
             onProcess!(message['data']['ok'],message['data']['size']);
           }
+          break;
+        case "uploadComplete":
+          if(onFinish!=null){
+            onFinish!();
+          }
+          break;
       }
     });
   }
 
-  start({Function(int sentChunk, int tot)? onProcess}) async {
+  start(String id,{Function(int sentChunk, int tot)? onProcess,Function? onFinish}) async {
     this.onProcess=onProcess;
+    this.onFinish=onFinish;
     String uploadID;
     var filename = file.path
         .split(RegExp("/|\\\\"))
         .last;
-    var res = await http.post(Uri.parse("https://oss.rosmontis.top/passageOther/$filename?uploads"));
+    print(filename+" 123");
+    var res = await http.post(Uri.parse(remoteUrl+"/passageOther/disk/$nowDir/$filename?uploads"));
+    print(res.body);
     uploadID = RegExp("<UploadId>(.*)<\/UploadId>").firstMatch(res.body)!.group(1)!;
-    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename});
+    print(uploadID);
+    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename,"userid":id,"dir":nowDir});
   }
 
 }
@@ -45,8 +59,9 @@ uploadFunc(message) async {
   SendPort sendPort=message['port'];
   File file=message['file'];
   String filename=message['filename'];
-
+  String userid=message['userid'];
   String uploadID=message['id'];
+  String dir=message['dir'];
   var isoRecPort = ReceivePort();
   sendPort.send({"msg": "connect", "data": isoRecPort.sendPort});
   var fio = await file.open();
@@ -66,7 +81,7 @@ uploadFunc(message) async {
         print(start);
         if (start<size) {
           var res = await http.put(
-              Uri.parse("https://oss.rosmontis.top/passageOther/$filename?partNumber=$nowPart&uploadId=$uploadID"),
+              Uri.parse(remoteUrl+"/passageOther/disk/$dir/$filename?partNumber=$nowPart&uploadId=$uploadID"),
               body: buffer);
           check[nowPart] = res.headers['etag'];
           nowPart++;
@@ -89,9 +104,9 @@ uploadFunc(message) async {
           checker="<CompleteMultipartUpload>\n"+checker+"\n</CompleteMultipartUpload>";
           print(checker);
           var res = await http.post(
-              Uri.parse("https://oss.rosmontis.top/passageOther/$filename?uploadId=$uploadID"), body: checker);
+              Uri.parse(remoteUrl+"/passageOther/disk/$dir/$filename?uploadId=$uploadID"), body: checker);
           print("complate${res.statusCode}");
-          Isolate.exit(sendPort,{"msg":"shouldContinue"});
+          Isolate.exit(sendPort,{"msg":"uploadComplete"});
         }
         break;
       case "":

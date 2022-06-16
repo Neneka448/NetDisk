@@ -92,17 +92,19 @@ class _UserInfoSettingsPageState extends State<OtherSettingsPage> {
           Expanded(
               child: OutlinedButton(
             style: OutlinedButton.styleFrom(side: BorderSide.none),
-            onPressed: () {},
+            onPressed: () {
+              store.clearManifest();
+            },
             child: Container(
               padding: EdgeInsets.only(left: 10, right: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "检查新版本",
+                    "清除数据",
                     style: TextStyle(fontSize: 18, color: Colors.black),
                   ),
-                  Text("v1.0.0 >", style: TextStyle(fontSize: 14, color: Colors.grey))
+                  Text("上传、下载数据 >", style: TextStyle(fontSize: 14, color: Colors.grey))
                 ],
               ),
             ),

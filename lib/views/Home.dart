@@ -10,7 +10,10 @@ import 'package:netdisk/views/RecycleList.dart';
 import 'package:netdisk/views/UserInfoSettings.dart';
 import 'package:netdisk/views/SharePage.dart';
 import 'package:netdisk/views/User.dart';
-import '../GlobalClass.dart' show FileDescriptor, NavigatorKey;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xml2json/xml2json.dart';
+import '../GlobalClass.dart' show FileDescriptor, FileState, NavigatorKey, User;
+import '../GlobalVariables.dart';
 import 'FileDetail.dart';
 import 'FileList.dart';
 import 'package:http/http.dart' as http;
@@ -19,9 +22,27 @@ import '../Store.dart' show Store;
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
-class DiskRootApp extends StatelessWidget {
+class DiskRootApp extends StatelessWidget with WidgetsBindingObserver {
   const DiskRootApp({Key? key}) : super(key: key);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch(state){
 
+      case AppLifecycleState.resumed:
+        // TODO: Handle this case.
+        break;
+      case AppLifecycleState.inactive:
+        // TODO: Handle this case.
+        break;
+      case AppLifecycleState.paused:
+        // TODO: Handle this case.
+        break;
+      case AppLifecycleState.detached:
+        // TODO: Handle this case.
+      print(111);
+        break;
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final Store store = Get.put(Store());
@@ -58,7 +79,6 @@ class DiskRootApp extends StatelessWidget {
 class DiskApp extends StatefulWidget {
   final File? initFile;
   const DiskApp({Key? key,this.initFile}) : super(key: key);
-
   @override
   State<DiskApp> createState() => _DiskAppState();
 }
@@ -67,7 +87,38 @@ class _DiskAppState extends State<DiskApp> {
   late Function fileListGoBackCallBack;
   late Function shouldFileBottomSheetClose;
   int _currentIndex = 0;
+  final Store store = Get.find();
 
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    if (store.loginState.value == false) {
+      SharedPreferences.getInstance().then((preference) {
+        var token = preference.getString('token');
+        if (token != null) {
+          http.get(Uri.parse(remoteUrl + "/passageOther/user/$token")).then((response) {
+            if (response.statusCode == 200) {
+              store.token.value = token;
+              store.changeLoginState(true);
+              http.get(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
+                  .then((res){
+                dynamic rawData = jsonDecode(res.body);
+                print(rawData);
+                store.setUser(User.fromJson(rawData));
+                store.user.refresh();
+              });
+            } else {
+              preference.remove('token');
+            }
+
+          });
+        }
+      });
+    }
+    store.loadFromDisk();
+
+  }
   void onBack(Function fn) {
     fileListGoBackCallBack = fn;
   }
@@ -75,10 +126,10 @@ class _DiskAppState extends State<DiskApp> {
   void onChangeNavi(Function fn) {
     shouldFileBottomSheetClose = fn;
   }
-
+  String newFolderName="";
   @override
   Widget build(BuildContext context) {
-    final Store store = Get.find();
+
     return Scaffold(
       floatingActionButton: Obx(() {
         return ((_currentIndex == 0) && (store.chooseMode.value == false))
@@ -123,14 +174,21 @@ class _DiskAppState extends State<DiskApp> {
                                         var result=await FilePicker.platform.pickFiles();
                                         if(result!=null){
                                           io.File file=io.File(result.files.single.path!);
-                                          String filename=result.files.single.path!.split(RegExp("/\\\\")).last;
-                                          UploadIsolate uploader=UploadIsolate(file);
-                                          uploader.start(onProcess: (ok,size){
+                                          String filename=result.files.single.path!.split(RegExp("/|\\\\")).last;
+                                          print(store.nowDir);
+                                          UploadIsolate uploader=UploadIsolate(file,store.nowDir.value);
+                                          uploader.start(store.token.value,onProcess: (ok,size){
                                             if(store.uploadList[filename]==null){
-                                              store.uploadList[filename]=FileDescriptor(filename);
+                                              store.uploadList[filename]=FileDescriptor(filename,result.files.single.path!,DateTime.now().millisecondsSinceEpoch);
+                                              store.uploadList[filename]!.state=FileState.downloading;
                                             }
                                             store.uploadList[filename]!.size=size;
                                             store.uploadList[filename]!.rec=ok;
+                                            store.saveToDisk();
+                                            store.uploadList.refresh();
+                                          },onFinish: (){
+                                            store.uploadList[filename]!.state=FileState.done;
+                                            store.saveToDisk();
                                             store.uploadList.refresh();
                                           });
                                         }
@@ -146,7 +204,39 @@ class _DiskAppState extends State<DiskApp> {
                                   children: [
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(side: BorderSide.none),
-                                      onPressed: () {
+                                      onPressed: ()async {
+                                        showModalBottomSheet(context: context,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (context){
+                                              return StatefulBuilder(builder: (context,setState){
+                                                return AnimatedPadding(
+                                                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                                                  duration: Duration.zero,
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.only(topLeft: Radius.circular(10),topRight: Radius.circular(10)),
+                                                    child: Container(
+                                                      constraints: BoxConstraints(
+                                                          maxHeight: 100
+                                                      ),
+                                                      child: TextField(
+                                                        decoration: InputDecoration(
+                                                            hintText: "请输入文件夹名称",
+                                                            filled: true,
+                                                            fillColor: Colors.white
+                                                        ),
+                                                        onSubmitted: (v)async{
+                                                          setState((){
+                                                            newFolderName=v;
+                                                          });
+                                                          await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join("/")}/$newFolderName/'));
+                                                          Navigator.pop(context);
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),);
+                                              });
+                                            });
+
                                       },
                                       child: Column(
                                         children: [Icon(Icons.create_new_folder,size: 40,), Text("新建文件夹",style: TextStyle(color: Colors.black),)],

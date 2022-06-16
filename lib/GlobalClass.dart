@@ -1,5 +1,4 @@
-
-
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 
 class RawResponse<T>{
@@ -68,14 +67,60 @@ String getFormatTime(DateTime time,{bool needYear=false}){
     return "${time.month < 10 ? '0${time.month}' : time.month}-${time.day < 10 ? '0${time.day}' : time.day} ${time.hour < 10 ? '0${time.hour}' : time.hour}:${time.minute < 10 ? '0${time.minute}' : time.minute}";
   }
 }
-
+String getFormatDownloadSpeed(FileDescriptor file){
+  String ext="B/s";
+  double realSpeed=file.rec*1000/(DateTime.now().millisecondsSinceEpoch-file.startTime);
+  if(realSpeed>=1024&&realSpeed<1024*1024){
+    ext="KB/s";
+    realSpeed/=1024;
+  }else if(realSpeed>=1024*1024&&realSpeed<1024*1024*1024){
+    ext="MB/s";
+    realSpeed/=1024*1024;
+  }else if(realSpeed>=1024*1024*1024){
+    ext="GB/s";
+    realSpeed/=1024*1024*1024;
+  }
+  return realSpeed.toStringAsFixed(2)+ext;
+}
 class NavigatorKey{
   static final key=GlobalKey<NavigatorState>();
 }
 
+enum FileState{
+  init,
+  downloading,
+  paused,
+  done
+}
+
 class FileDescriptor{
   String name;
+  String downloadUrl;
   int rec=0;
   int size=1;
-  FileDescriptor(this.name);
+  int startTime=1;
+  String url="";
+  FileState state=FileState.init;
+  FileDescriptor(this.name,this.downloadUrl,this.startTime);
+  toJson(){
+    return {
+      "name":name,
+      "downloadUrl":downloadUrl,
+      "rec":rec,
+      "size":size,
+      "url":url,
+    };
+  }
+  factory FileDescriptor.fromJson(Map<String,dynamic>json){
+    var temp=FileDescriptor(json['name']!, json['downloadUrl']!, DateTime.now().millisecondsSinceEpoch);
+    temp.size=json['size']!;
+    temp.rec=json['rec']!;
+    temp.url=json['url'];
+    if(temp.rec<temp.size){
+      temp.state=FileState.paused;
+    }else{
+      temp.state=FileState.done;
+    }
+    return temp;
+  }
 }
