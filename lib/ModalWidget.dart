@@ -9,7 +9,7 @@ import 'package:netdisk/GlobalVariables.dart';
 import 'package:netdisk/Store.dart';
 import 'package:netdisk/views/FileList.dart';
 
-Widget buildBottomSheetWidget(SharedItemInfo shared,BuildContext context,{Function? onDelete}) {
+Widget buildBottomSheetWidget(dynamic shared,BuildContext context,{Function? onDelete}) {
   final Store store=Get.find();
   return Column(
     mainAxisAlignment: MainAxisAlignment.end,
@@ -24,10 +24,12 @@ Widget buildBottomSheetWidget(SharedItemInfo shared,BuildContext context,{Functi
             padding: EdgeInsets.all(10),
             child: Column(
               children: [
-                Text(shared.sharedName),
-                Text(shared.sharedId),
-                Text(getFormatTime(DateTime.fromMillisecondsSinceEpoch(shared.sharedTime),needYear: true)),
-                Text(getFormatTime(DateTime.fromMillisecondsSinceEpoch(shared.expireTime),needYear: true))
+                Text(jsonDecode(shared['shareName']).join(','),style: TextStyle(
+                  overflow: TextOverflow.ellipsis
+                ),),
+                Text(shared['source']),
+                Text(getFormatTime(DateTime.fromMillisecondsSinceEpoch(shared['shareDate']),needYear: true)),
+                Text(getFormatTime(DateTime.fromMillisecondsSinceEpoch(shared['expireDate']),needYear: true))
               ],
             ),
           ),
@@ -45,23 +47,17 @@ Widget buildBottomSheetWidget(SharedItemInfo shared,BuildContext context,{Functi
                         side: BorderSide.none,
                         primary: Color.fromARGB(255, 26, 92, 120)),
                     onPressed: ()async {
-                      var res=await http.post(Uri.parse(baseURl+'/share/link'),headers: {
-                        "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                      },body: jsonEncode({
-                        "id":shared.sharedId
-                      }));
-                      String url=jsonDecode(res.body)['data']['link'];
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text("已复制到剪贴板"),
                       ));
-                      Clipboard.setData(ClipboardData(text: url));
+                      Clipboard.setData(ClipboardData(text: "Netdisk Shared Code: ${shared['crypted']} and extract code is ${shared["psw"]}."));
                       Navigator.pop(context);
                     },
                     child: Container(
                       height: 60,
                       alignment: Alignment.center,
                       child: Text(
-                        "获取链接",
+                        "提取码",
                         style: TextStyle(color: Colors.white, fontSize: 16),
                       ),
                     ))),

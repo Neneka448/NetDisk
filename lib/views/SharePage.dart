@@ -1,15 +1,17 @@
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../GlobalClass.dart' show RawResponse, SharedItemInfo, getFormatTime;
-import '../GlobalVariables.dart' show baseURl;
+import '../GlobalVariables.dart' show baseURl, remoteUrl;
 import 'dart:convert';
-
+import 'package:get/get.dart';
 import '../ModalWidget.dart';
-class ButtonList{
-  late SharedItemInfo tag;
+import '../Store.dart';
+
+class ButtonList {
+  late dynamic tag;
   late OutlinedButton button;
-  ButtonList({required this.button,required this.tag});
+
+  ButtonList({required this.button, required this.tag});
 }
 
 class SharePage extends StatefulWidget {
@@ -21,46 +23,37 @@ class SharePage extends StatefulWidget {
 
 class _SharePageState extends State<SharePage> {
   var shares = <ButtonList>[];
+  final Store store = Get.find();
 
   @override
   void initState() {
     super.initState();
-    http.get(Uri.parse(baseURl + "/share/list")).then((res) {
-      dynamic t = jsonDecode(res.body);
-      print(t['data']);
-      RawResponse<List<SharedItemInfo>> rawRes =
-          RawResponse<List<SharedItemInfo>>(
-              status: t['status'],
-              desc: t['desc'],
-              data:
-                  List.from(t['data'].map((v) => SharedItemInfo.fromJson(v))));
-      setState(() {
-        shares = rawRes.data.map((v) {
-          var time = DateTime.fromMillisecondsSinceEpoch(v.sharedTime);
-          var t=OutlinedButton(
+    http.get(Uri.parse(remoteUrl + "/passageOther/share/user/${store.token.value}")).then((res) async {
+      List<dynamic> t = jsonDecode(res.body);
+      (() async {
+        for (var i in t) {
+          var ss = jsonDecode((await http.get(Uri.parse(remoteUrl + "/passageOther/share/real/$i"))).body);
+          var time = DateTime.fromMillisecondsSinceEpoch(ss['shareDate']);
+          var button = OutlinedButton(
               onPressed: () {
                 showModalBottomSheet(
                     context: context,
-                    builder: (BuildContext context){
-                      return buildBottomSheetWidget(v,context,onDelete: (){
+                    builder: (BuildContext context) {
+                      return buildBottomSheetWidget(ss, context, onDelete: () {
                         setState(() {
-                          shares=shares.where((element){
-                            if(element.tag==v){
+                          shares = shares.where((element) {
+                            if (element.tag == ss) {
                               return false;
-                            }else{
+                            } else {
                               return true;
                             }
                           }).toList();
                         });
                         Navigator.pop(context);
                       });
-
                     },
-                    constraints: BoxConstraints(
-                        maxHeight: 260
-                    ),
-                    backgroundColor: Colors.transparent
-                );
+                    constraints: BoxConstraints(maxHeight: 260),
+                    backgroundColor: Colors.transparent);
               },
               style: OutlinedButton.styleFrom(side: BorderSide.none),
               child: Flex(
@@ -68,7 +61,7 @@ class _SharePageState extends State<SharePage> {
                 direction: Axis.horizontal,
                 children: [
                   Container(
-                    margin: EdgeInsets.only(right:16),
+                    margin: EdgeInsets.only(right: 16),
                     child: Icon(Icons.folder),
                   ),
                   Expanded(
@@ -76,36 +69,29 @@ class _SharePageState extends State<SharePage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(v.sharedName),
+                          Text("我的分享"),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 "${time.month < 10 ? '0${time.month}' : time.month}-${time.day < 10 ? '0${time.day}' : time.day} ${time.hour < 10 ? '0${time.hour}' : time.hour}:${time.minute < 10 ? '0${time.minute}' : time.minute}",
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color:Colors.grey
-                                ),
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
                               ),
                               Text(
-                                "过期时间:${getFormatTime(DateTime.fromMillisecondsSinceEpoch(v.expireTime))}",
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color:Colors.grey
-                                ),
+                                "过期时间:${getFormatTime(DateTime.fromMillisecondsSinceEpoch(ss['expireDate']))}",
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
                               )
                             ],
                           )
                         ],
                       )),
-
-
-
                 ],
               ));
-          return ButtonList(button: t, tag: v);
-        }).toList();
-      });
+          setState(() {
+            shares.add(ButtonList(button: button, tag: ss));
+          });
+        }
+      })();
     });
   }
 

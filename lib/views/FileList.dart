@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -10,10 +12,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml2json/xml2json.dart';
 import '../DownloadIsolate.dart';
 import '../GlobalVariables.dart' show baseURl, remoteUrl;
-import '../GlobalClass.dart' show FileDescriptor, FileState, NavigatorKey, User, getFormatTime;
+import '../GlobalClass.dart'
+    show FileDescriptor, FileState, NavigatorKey, SharedItemInfo, User, dem2Hex, getFileFromXML, getFormatTime;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import '../Store.dart';
+import 'package:cryptography/cryptography.dart' as crypto;
+import 'dart:math';
+
 class File {
   final String fileName;
   final String fileSize;
@@ -116,7 +122,7 @@ class FileListTreeVisitor {
     return this;
   }
 
-  String getFilePathToRoot(String fileID,String token) {
+  String getFilePathToRoot(String fileID, String token) {
     // var s = <String>[];
     // var now = FileListTreeVisitor(visitee.getChild(fileID));
     // while (!now.isRootFile()) {
@@ -124,7 +130,7 @@ class FileListTreeVisitor {
     //   now = now.returnToParent();
     // }
     // return s.reversed.join("<");
-    return fileID.replaceAll(RegExp('.*/$token/'),"/");
+    return fileID.replaceAll(RegExp('.*/$token/'), "/");
   }
 
   File getFile() {
@@ -159,6 +165,7 @@ class FileList extends StatefulWidget {
 
   const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile})
       : super(key: key);
+
   @override
   State<FileList> createState() => _FileListState();
 }
@@ -181,7 +188,7 @@ class _FileListState extends State<FileList> {
   late FileListTreeVisitor visitor = FileListTreeVisitor(fileTree);
 
   void getFileListWhenInit() async {
-    store.nowDir.value=[store.token.value];
+    store.nowDir.value = [store.token.value];
     if (widget.initFile != null) {
       final res = await http.post(Uri.parse(baseURl + "/disk/list/details"),
           headers: {"Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"},
@@ -193,36 +200,66 @@ class _FileListState extends State<FileList> {
       });
     } else {
       final res = await http.get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.token.value}/&delimiter=/"));
-      if(res.statusCode==200){
-        var transformer=Xml2Json();
+      if (res.statusCode == 200) {
+        var transformer = Xml2Json();
         transformer.parse(res.body);
         var json = jsonDecode(transformer.toParker());
-        if(json['ListBucketResult']['CommonPrefixes']!=null){
-          if(json['ListBucketResult']['CommonPrefixes'] is! List){
-            var ele=json['ListBucketResult']['CommonPrefixes'];
-            final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
-            files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
-          }else{
-            json['ListBucketResult']['CommonPrefixes'].forEach((ele){
-              final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
-              files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+        if (json['ListBucketResult']['CommonPrefixes'] != null) {
+          if (json['ListBucketResult']['CommonPrefixes'] is! List) {
+            var ele = json['ListBucketResult']['CommonPrefixes'];
+            final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+            files.add(
+              File(
+                  fileName: filename.last,
+                  fileID: ele['Prefix'],
+                  fileSize: "0",
+                  date: "0",
+                  fileType: 'folder',
+                  lastModifiedTime: DateTime.now()),
+            );
+          } else {
+            json['ListBucketResult']['CommonPrefixes'].forEach((ele) {
+              final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+              files.add(
+                File(
+                    fileName: filename.last,
+                    fileID: ele['Prefix'],
+                    fileSize: "0",
+                    date: "0",
+                    fileType: 'folder',
+                    lastModifiedTime: DateTime.now()),
+              );
             });
           }
         }
-        if(json['ListBucketResult']['Contents']!=null){
-          if(json['ListBucketResult']['Contents'] is! List){
-            var ele=json['ListBucketResult']['Contents'];
+        if (json['ListBucketResult']['Contents'] != null) {
+          if (json['ListBucketResult']['Contents'] is! List) {
+            var ele = json['ListBucketResult']['Contents'];
             print(ele);
-            final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
-            files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
-          }else{
+            final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+            files.add(File(
+              fileName: filename.last,
+              fileID: ele['Key'],
+              fileSize: ele['Size'],
+              date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+              fileType: 'file',
+              lastModifiedTime: DateTime.parse(ele['LastModified']),
+            ));
+          } else {
             print(json['ListBucketResult']['Contents']);
-            json['ListBucketResult']['Contents'].forEach((ele){
-              if(ele['Key'].endsWith('/')){
+            json['ListBucketResult']['Contents'].forEach((ele) {
+              if (ele['Key'].endsWith('/')) {
                 return;
               }
-              final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
-              files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+              final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+              files.add(File(
+                fileName: filename.last,
+                fileID: ele['Key'],
+                fileSize: ele['Size'],
+                date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+                fileType: 'file',
+                lastModifiedTime: DateTime.parse(ele['LastModified']),
+              ));
             });
           }
         }
@@ -245,8 +282,10 @@ class _FileListState extends State<FileList> {
             if (response.statusCode == 200) {
               store.token.value = token;
               store.changeLoginState(true);
-              http.get(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
-                  .then((res){
+              http
+                  .get(Uri.parse(
+                      "https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
+                  .then((res) {
                 dynamic rawData = jsonDecode(res.body);
                 print(rawData);
                 store.setUser(User.fromJson(rawData));
@@ -256,11 +295,10 @@ class _FileListState extends State<FileList> {
             } else {
               preference.remove('token');
             }
-
           });
         }
       });
-    }else{
+    } else {
       getFileListWhenInit();
     }
     widget.onChangeNavi(() {
@@ -288,7 +326,7 @@ class _FileListState extends State<FileList> {
         });
       } else {
         print(store.nowDir);
-        if(store.nowDir.length>1){
+        if (store.nowDir.length > 1) {
           store.nowDir.remove(store.nowDir.last);
           store.nowDir.refresh();
         }
@@ -344,27 +382,27 @@ class _FileListState extends State<FileList> {
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () async {
-                                  final url=remoteUrl+'/'+e.fileID;
-                                  var t=DownloadIsolate(url);
-                                  t.start(onInit_: (size){
-                                    store.downloadList[e.fileName]=FileDescriptor(e.fileName,url,DateTime.now().millisecondsSinceEpoch);
-                                    store.downloadList[e.fileName]!.size=size;
+                                  final url = remoteUrl + '/' + e.fileID;
+                                  var t = DownloadIsolate(url);
+                                  t.start(onInit_: (size) {
+                                    store.downloadList[e.fileName] =
+                                        FileDescriptor(e.fileName, url, DateTime.now().millisecondsSinceEpoch);
+                                    store.downloadList[e.fileName]!.size = size;
                                     store.downloadList.refresh();
-                                  },onProcess_: (ok,tot){
-                                    if(store.downloadList[e.fileName]!.state!=FileState.downloading){
-                                      store.downloadList[e.fileName]!.state=FileState.downloading;
+                                  }, onProcess_: (ok, tot) {
+                                    if (store.downloadList[e.fileName]!.state != FileState.downloading) {
+                                      store.downloadList[e.fileName]!.state = FileState.downloading;
                                     }
-                                    store.downloadList[e.fileName]!.rec=ok;
+                                    store.downloadList[e.fileName]!.rec = ok;
                                     store.saveToDisk();
                                     store.downloadList.refresh();
-                                  },onDone_: (url){
-                                    store.downloadList[e.fileName]!.state=FileState.done;
-                                    store.downloadList[e.fileName]!.url=url;
+                                  }, onDone_: (url) {
+                                    store.downloadList[e.fileName]!.state = FileState.done;
+                                    store.downloadList[e.fileName]!.url = url;
                                     store.saveToDisk();
                                     store.downloadList.refresh();
                                   });
-
-                                  },
+                                },
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -420,25 +458,99 @@ class _FileListState extends State<FileList> {
                                                               shape: BoxShape.circle),
                                                           child: IconButton(
                                                             icon: Icon(Icons.link),
-                                                            onPressed: () {
+                                                            onPressed: () async {
                                                               final chosenIDs = chosenMap.keys.toList();
-                                                              http
-                                                                  .post(Uri.parse(baseURl + '/share/sharefile'),
-                                                                      headers: {
-                                                                        "Authorization":
-                                                                            "Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                                                      },
-                                                                      body: jsonEncode({
-                                                                        "ids": chosenIDs,
-                                                                        "psw": shareFilePsw,
-                                                                        "days": shareFileValidDays
-                                                                      }))
-                                                                  .then((value) {
-                                                                final data = jsonDecode(value.body)['data'];
-                                                                Clipboard.setData(ClipboardData(
-                                                                    text:
-                                                                        "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}."));
-                                                              });
+                                                              var fileSet = <String>[];
+                                                              var shareFiles=<String>[];
+                                                              for (var element in chosenIDs) {
+                                                                var child = visitor.visitee.getChild(element);
+                                                                if (child.file.fileType == 'file') {
+                                                                  fileSet.add(element);
+                                                                  shareFiles.add(child.file.fileName);
+                                                                } else if (child.file.fileType == 'folder') {
+                                                                  var fileRes = await http.get(Uri.parse(
+                                                                      remoteUrl + '/?prefix=${child.file.fileID}'));
+                                                                  var files = getFileFromXML(fileRes.body);
+                                                                  for (var i in files) {
+                                                                    if (i.fileID.endsWith('/') == false) {
+                                                                      fileSet.add(i.fileID);
+                                                                      shareFiles.add(i.fileName);
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                              String shareUuid = md5
+                                                                  .convert(utf8.encode(fileSet.join(",") +
+                                                                      DateTime.now().microsecondsSinceEpoch.toString()))
+                                                                  .toString();
+                                                              var res = <String>[];
+                                                              String prefix = store.nowDir.join("/");
+                                                              for (var i in fileSet) {
+                                                                final relAdd = RegExp('(?<=$prefix/)(.*)\$')
+                                                                    .firstMatch(i)!
+                                                                    .group(1);
+                                                                print(relAdd);
+                                                                var symlinkRes = await http.put(
+                                                                    Uri.parse(remoteUrl +
+                                                                        '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
+                                                                    headers: {"x-oss-symlink-target": i});
+                                                                if (symlinkRes.statusCode == 200) {
+                                                                  res.add(
+                                                                      'passageOther/share/${store.token.value}/$shareUuid/$relAdd');
+                                                                }
+                                                              }
+                                                              final algo = crypto.AesCtr.with128bits(
+                                                                  macAlgorithm: crypto.Hmac.sha256());
+                                                              var randomPsw =
+                                                                  crypto.SecretKeyData.random(length: 16).bytes;
+                                                              var secretKey =
+                                                                  await algo.newSecretKeyFromBytes(randomPsw);
+                                                              if (shareFilePsw != "") {
+                                                                secretKey = await algo
+                                                                    .newSecretKeyFromBytes(utf8.encode(shareFilePsw));
+                                                              }
+                                                              final expireTime = DateTime.now().millisecondsSinceEpoch +
+                                                                  shareFileValidDays * 24 * 60 * 60 * 1000;
+                                                              var encryptedShareLink = await algo.encrypt(
+                                                                  utf8.encode(shareUuid),
+                                                                  secretKey: secretKey);
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/real/$shareUuid'),
+                                                                  body: jsonEncode({
+                                                                    "source": shareUuid,
+                                                                    "psw": shareFilePsw == ""
+                                                                        ? dem2Hex(randomPsw)
+                                                                        : shareFilePsw,
+                                                                    "expireDate": expireTime,
+                                                                    "shareDate":DateTime.now().millisecondsSinceEpoch,
+                                                                    "shareName":jsonEncode(shareFiles),
+                                                                    "crypted": dem2Hex(encryptedShareLink.cipherText)
+                                                                  }));
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/deCrypto/${dem2Hex(encryptedShareLink.cipherText)}'),
+                                                                  body: jsonEncode({
+                                                                    "mac": jsonEncode(encryptedShareLink.mac.bytes),
+                                                                    "nonce": jsonEncode(encryptedShareLink.nonce),
+                                                                    "cipherText":
+                                                                        jsonEncode(encryptedShareLink.cipherText)
+                                                                  }));
+                                                              store.shareList.add(shareUuid);
+                                                              store.shareList.refresh();
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/user/${store.token.value}'),
+                                                                  body: jsonEncode(store.shareList));
+
+                                                              Clipboard.setData(ClipboardData(
+                                                                  text:
+                                                                      "Netdisk Shared Code: ${dem2Hex(encryptedShareLink.cipherText)} and extract code is ${shareFilePsw == "" ? dem2Hex(randomPsw) : shareFilePsw}."));
+                                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                                content: Text("已复制到剪切板"),
+                                                                duration: Duration(milliseconds: 500),
+                                                              ));
+                                                              Navigator.pop(context);
                                                             },
                                                           ),
                                                         ),
@@ -462,24 +574,93 @@ class _FileListState extends State<FileList> {
                                                               shape: BoxShape.circle),
                                                           child: IconButton(
                                                             icon: Icon(Icons.share),
-                                                            onPressed: () {
+                                                            onPressed: () async {
                                                               final chosenIDs = chosenMap.keys.toList();
-                                                              http
-                                                                  .post(Uri.parse(baseURl + '/share/sharefile'),
-                                                                      headers: {
-                                                                        "Authorization":
-                                                                            "Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                                                      },
-                                                                      body: jsonEncode({
-                                                                        "ids": chosenIDs,
-                                                                        "psw": shareFilePsw,
-                                                                        "days": shareFileValidDays
-                                                                      }))
-                                                                  .then((value) {
-                                                                final data = jsonDecode(value.body)['data'];
-                                                                Share.share(
-                                                                    "Netdisk Shared Link: ${data['url']} and extract code is ${data['psw']}.");
-                                                              });
+                                                              var fileSet = <String>[];
+                                                              var shareFiles=<String>[];
+                                                              for (var element in chosenIDs) {
+                                                                var child = visitor.visitee.getChild(element);
+                                                                if (child.file.fileType == 'file') {
+                                                                  fileSet.add(element);
+                                                                  shareFiles.add(child.file.fileName);
+                                                                } else if (child.file.fileType == 'folder') {
+                                                                  var fileRes = await http.get(Uri.parse(
+                                                                      remoteUrl + '/?prefix=${child.file.fileID}'));
+                                                                  var files = getFileFromXML(fileRes.body);
+                                                                  for (var i in files) {
+                                                                    if (i.fileID.endsWith('/') == false) {
+                                                                      fileSet.add(i.fileID);
+                                                                      shareFiles.add(i.fileName);
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                              String shareUuid = md5
+                                                                  .convert(utf8.encode(fileSet.join(",") +
+                                                                  DateTime.now().microsecondsSinceEpoch.toString()))
+                                                                  .toString();
+                                                              var res = <String>[];
+                                                              String prefix = store.nowDir.join("/");
+                                                              for (var i in fileSet) {
+                                                                final relAdd = RegExp('(?<=$prefix/)(.*)\$')
+                                                                    .firstMatch(i)!
+                                                                    .group(1);
+                                                                print(relAdd);
+                                                                var symlinkRes = await http.put(
+                                                                    Uri.parse(remoteUrl +
+                                                                        '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
+                                                                    headers: {"x-oss-symlink-target": i});
+                                                                if (symlinkRes.statusCode == 200) {
+                                                                  res.add(
+                                                                      'passageOther/share/${store.token.value}/$shareUuid/$relAdd');
+                                                                }
+                                                              }
+                                                              final algo = crypto.AesCtr.with128bits(
+                                                                  macAlgorithm: crypto.Hmac.sha256());
+                                                              var randomPsw =
+                                                                  crypto.SecretKeyData.random(length: 16).bytes;
+                                                              var secretKey =
+                                                              await algo.newSecretKeyFromBytes(randomPsw);
+                                                              if (shareFilePsw != "") {
+                                                                secretKey = await algo
+                                                                    .newSecretKeyFromBytes(utf8.encode(shareFilePsw));
+                                                              }
+                                                              final expireTime = DateTime.now().millisecondsSinceEpoch +
+                                                                  shareFileValidDays * 24 * 60 * 60 * 1000;
+                                                              var encryptedShareLink = await algo.encrypt(
+                                                                  utf8.encode(shareUuid),
+                                                                  secretKey: secretKey);
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/real/$shareUuid'),
+                                                                  body: jsonEncode({
+                                                                    "source": shareUuid,
+                                                                    "psw": shareFilePsw == ""
+                                                                        ? dem2Hex(randomPsw)
+                                                                        : shareFilePsw,
+                                                                    "expireDate": expireTime,
+                                                                    "shareDate":DateTime.now().millisecondsSinceEpoch,
+                                                                    "shareName":shareFiles.join(","),
+                                                                    "crypted": dem2Hex(encryptedShareLink.cipherText)
+                                                                  }));
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/deCrypto/${dem2Hex(encryptedShareLink.cipherText)}'),
+                                                                  body: jsonEncode({
+                                                                    "mac": jsonEncode(encryptedShareLink.mac.bytes),
+                                                                    "nonce": jsonEncode(encryptedShareLink.nonce),
+                                                                    "cipherText":
+                                                                    jsonEncode(encryptedShareLink.cipherText)
+                                                                  }));
+                                                              store.shareList.add(shareUuid);
+                                                              store.shareList.refresh();
+                                                              await http.put(
+                                                                  Uri.parse(remoteUrl +
+                                                                      '/passageOther/share/user/${store.token.value}'),
+                                                                  body: jsonEncode(store.shareList));
+                                                              Share.share(
+                                                                  "Netdisk Shared Code: $encryptedShareLink and extract code is ${shareFilePsw == "" ? dem2Hex(randomPsw) : shareFilePsw}.");
+                                                              Navigator.pop(context);
                                                             },
                                                           ),
                                                         ),
@@ -685,10 +866,13 @@ class _FileListState extends State<FileList> {
                                                         RichText(
                                                             text: TextSpan(children: [
                                                           TextSpan(
-                                                              text: "$shareFileValidDays ",
+                                                              text:
+                                                                  "${shareFileValidDays == 36500 ? "永久" : shareFileValidDays} ",
                                                               style: TextStyle(
                                                                   color: Colors.blue, fontWeight: FontWeight.bold)),
-                                                          TextSpan(text: "天内有效", style: TextStyle(color: Colors.black))
+                                                          TextSpan(
+                                                              text: "${shareFileValidDays == 36500 ? "" : "天内"}有效",
+                                                              style: TextStyle(color: Colors.black))
                                                         ])),
                                                         Text(
                                                           ">",
@@ -847,39 +1031,67 @@ class _FileListState extends State<FileList> {
                     http
                         .get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.nowDir.join('/')}/&delimiter=/"))
                         .then((res) {
-                      if(res.statusCode==200){
-                        var transformer=Xml2Json();
-                        files=[];
+                      if (res.statusCode == 200) {
+                        var transformer = Xml2Json();
+                        files = [];
                         transformer.parse(res.body);
                         var json = jsonDecode(transformer.toParker());
-                        if(json['ListBucketResult']['CommonPrefixes']!=null){
-                          if(json['ListBucketResult']['CommonPrefixes'] is! List){
-                            var ele=json['ListBucketResult']['CommonPrefixes'];
-                            final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
-                            files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
-
-                          }else{
-                            json['ListBucketResult']['CommonPrefixes'].forEach((ele){
-                              final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
-                              files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+                        if (json['ListBucketResult']['CommonPrefixes'] != null) {
+                          if (json['ListBucketResult']['CommonPrefixes'] is! List) {
+                            var ele = json['ListBucketResult']['CommonPrefixes'];
+                            final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+                            files.add(
+                              File(
+                                  fileName: filename.last,
+                                  fileID: ele['Prefix'],
+                                  fileSize: "0",
+                                  date: "0",
+                                  fileType: 'folder',
+                                  lastModifiedTime: DateTime.now()),
+                            );
+                          } else {
+                            json['ListBucketResult']['CommonPrefixes'].forEach((ele) {
+                              final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+                              files.add(
+                                File(
+                                    fileName: filename.last,
+                                    fileID: ele['Prefix'],
+                                    fileSize: "0",
+                                    date: "0",
+                                    fileType: 'folder',
+                                    lastModifiedTime: DateTime.now()),
+                              );
                             });
                           }
-
                         }
-                        if(json['ListBucketResult']['Contents']!=null){
-                          if(json['ListBucketResult']['Contents'] is! List){
-                            var ele=json['ListBucketResult']['Contents'];
+                        if (json['ListBucketResult']['Contents'] != null) {
+                          if (json['ListBucketResult']['Contents'] is! List) {
+                            var ele = json['ListBucketResult']['Contents'];
                             print(ele);
-                            final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
-                            files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
-                          }else{
+                            final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+                            files.add(File(
+                              fileName: filename.last,
+                              fileID: ele['Key'],
+                              fileSize: ele['Size'],
+                              date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+                              fileType: 'file',
+                              lastModifiedTime: DateTime.parse(ele['LastModified']),
+                            ));
+                          } else {
                             print(json['ListBucketResult']['Contents']);
-                            json['ListBucketResult']['Contents'].forEach((ele){
-                              if((ele['Key'] as String).endsWith('/')){
+                            json['ListBucketResult']['Contents'].forEach((ele) {
+                              if ((ele['Key'] as String).endsWith('/')) {
                                 return;
                               }
-                              final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
-                              files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+                              final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+                              files.add(File(
+                                fileName: filename.last,
+                                fileID: ele['Key'],
+                                fileSize: ele['Size'],
+                                date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+                                fileType: 'file',
+                                lastModifiedTime: DateTime.parse(ele['LastModified']),
+                              ));
                             });
                           }
                         }
@@ -894,7 +1106,7 @@ class _FileListState extends State<FileList> {
                 });
               } else if (e.fileType == "file") {
                 Navigator.pushNamed(context, "/file",
-                    arguments: {'file': e, 'location': visitor.getFilePathToRoot(e.fileID,store.token.value)});
+                    arguments: {'file': e, 'location': visitor.getFilePathToRoot(e.fileID, store.token.value)});
               }
             }
           },
@@ -915,20 +1127,22 @@ class _FileListState extends State<FileList> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(e.fileName, style: const TextStyle(color: Colors.black, fontSize: 16)),
-                      e.fileType == "file" ?Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)), needYear: true),
-                            style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                          Container(
-                            margin: const EdgeInsets.only(left: 10),
-                            child: Text(e.fileType == "file" ? "${fileSize.toStringAsFixed(2)}$fileSizeExt" : "",
-                                style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                          )
-                        ],
-                      ):Container()
+                      e.fileType == "file"
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  getFormatTime(DateTime.fromMillisecondsSinceEpoch(int.parse(e.date)), needYear: true),
+                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                ),
+                                Container(
+                                  margin: const EdgeInsets.only(left: 10),
+                                  child: Text(e.fileType == "file" ? "${fileSize.toStringAsFixed(2)}$fileSizeExt" : "",
+                                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                )
+                              ],
+                            )
+                          : Container()
                     ],
                   ),
                 ],

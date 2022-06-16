@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:netdisk/views/FileList.dart';
+import 'package:xml2json/xml2json.dart';
 
 class RawResponse<T>{
   final String status;
@@ -123,4 +126,56 @@ class FileDescriptor{
     }
     return temp;
   }
+}
+
+
+List<File> getFileFromXML(String xml){
+  var transformer=Xml2Json();
+  var files=<File>[];
+  transformer.parse(xml);
+  var json = jsonDecode(transformer.toParker());
+  if(json['ListBucketResult']['CommonPrefixes']!=null){
+    if(json['ListBucketResult']['CommonPrefixes'] is! List){
+      var ele=json['ListBucketResult']['CommonPrefixes'];
+      final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+      files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+    }else{
+      json['ListBucketResult']['CommonPrefixes'].forEach((ele){
+        final filename=ele['Prefix'].replaceAll(RegExp(r"/$"),"").split('/');
+        files.add(File(fileName: filename.last, fileID: ele['Prefix'], fileSize: "0", date: "0", fileType: 'folder', lastModifiedTime: DateTime.now()),);
+      });
+    }
+  }
+  if(json['ListBucketResult']['Contents']!=null){
+    if(json['ListBucketResult']['Contents'] is! List){
+      var ele=json['ListBucketResult']['Contents'];
+      print(ele);
+      final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+      files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+    }else{
+      print(json['ListBucketResult']['Contents']);
+      json['ListBucketResult']['Contents'].forEach((ele){
+        if(ele['Key'].endsWith('/')){
+          return;
+        }
+        final filename=ele['Key'].replaceAll(RegExp(r"/$"),"").split('/');
+        files.add(File(fileName: filename.last, fileID: ele['Key'], fileSize: ele['Size'], date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(), fileType: 'file', lastModifiedTime: DateTime.parse(ele['LastModified']),));
+      });
+    }
+  }
+  return files;
+}
+const map64=['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q',
+  'R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
+  'w','x','y','z','+','='];
+String dem2Hex(List<int> dem){
+  const map=['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'];
+  String res='';
+  int cnt=0;
+  for(var i in dem){
+    int h0=i%16;
+    int h1=i~/16;
+    res+=map[h1]+map[h0];
+  }
+  return res;
 }

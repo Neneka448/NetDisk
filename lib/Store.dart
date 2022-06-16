@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:get/get.dart';
-import 'GlobalClass.dart' show FileDescriptor, FileState, User;
+import 'GlobalClass.dart' show FileDescriptor, FileState, SharedItemInfo, User;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 class Store extends GetxController{
@@ -12,6 +12,7 @@ class Store extends GetxController{
   var downloadList=<String,FileDescriptor>{}.obs;
   var uploadList=<String,FileDescriptor>{
   }.obs;
+  var shareList=<String>[].obs;
   var user=User(name: '', id: '', maxSpace: 1, usedSpace: 0,avatar: 'http://dummyimage.com/100x100',nickname:'').obs;
   changeLoginState(bool newState)=>loginState.value=newState;
   setUser(User _user)=>user.value=_user;
