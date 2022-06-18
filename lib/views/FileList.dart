@@ -13,7 +13,7 @@ import 'package:xml2json/xml2json.dart';
 import '../DownloadIsolate.dart';
 import '../GlobalVariables.dart' show baseURl, remoteUrl;
 import '../GlobalClass.dart'
-    show FileDescriptor, FileState, NavigatorKey, SharedItemInfo, User, dem2Hex, getFileFromXML, getFormatTime;
+    show FileDescriptor, FileState, NavigatorKey, SharedItemInfo, User, dem2Hex, formatSize, getFileFromXML, getFormatTime;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import '../Store.dart';
@@ -162,8 +162,8 @@ class FileList extends StatefulWidget {
   final Function backToParentCallback;
   final Function onChangeNavi;
   final File? initFile;
-
-  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile})
+  final String? from;
+  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile,this.from})
       : super(key: key);
 
   @override
@@ -190,16 +190,7 @@ class _FileListState extends State<FileList> {
   void getFileListWhenInit() async {
     store.nowDir.value = [store.token.value];
     if (widget.initFile != null) {
-      final res = await http.post(Uri.parse(baseURl + "/disk/list/details"),
-          headers: {"Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"},
-          body: jsonEncode({"id": widget.initFile!.fileID}));
-      List<dynamic> t = jsonDecode(res.body);
-      files = t.map((ele) => File.fromJson(ele)).toList();
-      setState(() {
-        visitor = visitor.buildChildren(files);
-      });
-    } else {
-      final res = await http.get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.token.value}/&delimiter=/"));
+      final res = await http.get(Uri.parse(remoteUrl + "/?prefix=${widget.initFile!.fileID}&delimiter=/"));
       if (res.statusCode == 200) {
         var transformer = Xml2Json();
         transformer.parse(res.body);
@@ -235,8 +226,8 @@ class _FileListState extends State<FileList> {
         if (json['ListBucketResult']['Contents'] != null) {
           if (json['ListBucketResult']['Contents'] is! List) {
             var ele = json['ListBucketResult']['Contents'];
-            print(ele);
             final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+            print(filename);
             files.add(File(
               fileName: filename.last,
               fileID: ele['Key'],
@@ -246,12 +237,12 @@ class _FileListState extends State<FileList> {
               lastModifiedTime: DateTime.parse(ele['LastModified']),
             ));
           } else {
-            print(json['ListBucketResult']['Contents']);
             json['ListBucketResult']['Contents'].forEach((ele) {
               if (ele['Key'].endsWith('/')) {
                 return;
               }
               final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+              print(filename);
               files.add(File(
                 fileName: filename.last,
                 fileID: ele['Key'],
@@ -264,10 +255,87 @@ class _FileListState extends State<FileList> {
           }
         }
         setState(() {
-          print(files);
           visitor = visitor.buildChildren(files);
         });
       }
+      // files = t.map((ele) => File.fromJson(ele)).toList();
+      // setState(() {
+      //   visitor = visitor.buildChildren(files);
+      // });
+    } else {
+      final res = await http.get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.token.value}/&delimiter=/"));
+      if (res.statusCode == 200) {
+        var transformer = Xml2Json();
+        transformer.parse(utf8.decode(res.bodyBytes));
+        var json = jsonDecode(transformer.toParker());
+        if (json['ListBucketResult']['CommonPrefixes'] != null) {
+          if (json['ListBucketResult']['CommonPrefixes'] is! List) {
+            var ele = json['ListBucketResult']['CommonPrefixes'];
+            final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+            print(filename);
+            files.add(
+              File(
+                  fileName: filename.last,
+                  fileID: ele['Prefix'],
+                  fileSize: "0",
+                  date: "0",
+                  fileType: 'folder',
+                  lastModifiedTime: DateTime.now()),
+            );
+          } else {
+            json['ListBucketResult']['CommonPrefixes'].forEach((ele) {
+              final filename = ele['Prefix'].replaceAll(RegExp(r"/$"), "").split('/');
+              print(filename);
+              files.add(
+                File(
+                    fileName: filename.last,
+                    fileID: ele['Prefix'],
+                    fileSize: "0",
+                    date: "0",
+                    fileType: 'folder',
+                    lastModifiedTime: DateTime.now()),
+              );
+            });
+          }
+        }
+        if (json['ListBucketResult']['Contents'] != null) {
+          if (json['ListBucketResult']['Contents'] is! List) {
+            var ele = json['ListBucketResult']['Contents'];
+            final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+            print(filename);
+            files.add(File(
+              fileName: filename.last,
+              fileID: ele['Key'],
+              fileSize: ele['Size'],
+              date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+              fileType: 'file',
+              lastModifiedTime: DateTime.parse(ele['LastModified']),
+            ));
+          } else {
+            json['ListBucketResult']['Contents'].forEach((ele) {
+              if (ele['Key'].endsWith('/')) {
+                return;
+              }
+              final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+              print(ele['Key']);
+              files.add(File(
+                fileName: filename.last,
+                fileID: ele['Key'],
+                fileSize: ele['Size'],
+                date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+                fileType: 'file',
+                lastModifiedTime: DateTime.parse(ele['LastModified']),
+              ));
+            });
+          }
+        }
+        setState(() {
+          visitor = visitor.buildChildren(files);
+        });
+      }
+      final shares=await http.get(Uri.parse(remoteUrl + "/passageOther/share/user/${store.token.value}"));
+      store.shareList.value=List<String>.from(jsonDecode(shares.body));
+      store.shareList.refresh();
     }
   }
 
@@ -287,7 +355,6 @@ class _FileListState extends State<FileList> {
                       "https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"))
                   .then((res) {
                 dynamic rawData = jsonDecode(res.body);
-                print(rawData);
                 store.setUser(User.fromJson(rawData));
                 store.user.refresh();
               });
@@ -323,17 +390,29 @@ class _FileListState extends State<FileList> {
         setState(() {
           store.chooseMode.value = false;
           chooseMode = false;
+
         });
+        Navigator.pop(context);
       } else {
-        print(store.nowDir);
-        if (store.nowDir.length > 1) {
-          store.nowDir.remove(store.nowDir.last);
-          store.nowDir.refresh();
+        if(widget.from=='share'){
+          if(visitor.isRootFile()){
+            Navigator.pop(context);
+          }else{
+            setState(() {
+              visitor = visitor.returnToParent();
+            });
+          }
+        }else{
+          if (store.nowDir.length > 1) {
+            store.nowDir.remove(store.nowDir.last);
+            store.nowDir.refresh();
+          }
+          setState(() {
+            visitor = visitor.returnToParent();
+          });
         }
-        print(store.nowDir);
-        setState(() {
-          visitor = visitor.returnToParent();
-        });
+
+
       }
     });
   }
@@ -342,20 +421,6 @@ class _FileListState extends State<FileList> {
   Widget build(BuildContext context) {
     var itemWidget = visitor.getChildren().map((e) {
       double fileSize = double.parse(e.fileSize);
-      String fileSizeExt = "bit";
-      if (fileSize < 8 * 1024) {
-        fileSize /= 8;
-        fileSizeExt = "B";
-      } else if (fileSize < 8 * 1024 * 1024) {
-        fileSizeExt = "KB";
-        fileSize /= 8 * 1024;
-      } else if (fileSize < 8 * 1024 * 1024 * 1024) {
-        fileSizeExt = "MB";
-        fileSize /= 8 * 1024 * 1024;
-      } else {
-        fileSizeExt = "GB";
-        fileSize /= 8 * 1024 * 1024 * 1024;
-      }
       return OutlinedButton(
           style: OutlinedButton.styleFrom(
             side: BorderSide.none,
@@ -386,8 +451,9 @@ class _FileListState extends State<FileList> {
                                   var t = DownloadIsolate(url);
                                   t.start(onInit_: (size) {
                                     store.downloadList[e.fileName] =
-                                        FileDescriptor(e.fileName, url, DateTime.now().millisecondsSinceEpoch);
+                                        FileDescriptor(e.fileName, url, DateTime.now().millisecondsSinceEpoch,0);
                                     store.downloadList[e.fileName]!.size = size;
+                                    store.downloadList[e.fileName]!.isolate=t;
                                     store.downloadList.refresh();
                                   }, onProcess_: (ok, tot) {
                                     if (store.downloadList[e.fileName]!.state != FileState.downloading) {
@@ -416,7 +482,7 @@ class _FileListState extends State<FileList> {
                                     )
                                   ],
                                 ))),
-                        Expanded(
+                        (widget.from!=null&&widget.from=="share")?Container():Expanded(
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () {
@@ -489,7 +555,6 @@ class _FileListState extends State<FileList> {
                                                                 final relAdd = RegExp('(?<=$prefix/)(.*)\$')
                                                                     .firstMatch(i)!
                                                                     .group(1);
-                                                                print(relAdd);
                                                                 var symlinkRes = await http.put(
                                                                     Uri.parse(remoteUrl +
                                                                         '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
@@ -506,8 +571,17 @@ class _FileListState extends State<FileList> {
                                                               var secretKey =
                                                                   await algo.newSecretKeyFromBytes(randomPsw);
                                                               if (shareFilePsw != "") {
+                                                                List<int> list=List.from(utf8.encode(shareFilePsw));
+                                                                
+                                                                if(list.length<16){
+                                                                  while(list.length<16){
+                                                                    list.add(0);
+                                                                  }
+                                                                }else if(list.length>16){
+                                                                  list=list.sublist(0,15);
+                                                                }
                                                                 secretKey = await algo
-                                                                    .newSecretKeyFromBytes(utf8.encode(shareFilePsw));
+                                                                    .newSecretKeyFromBytes(list);
                                                               }
                                                               final expireTime = DateTime.now().millisecondsSinceEpoch +
                                                                   shareFileValidDays * 24 * 60 * 60 * 1000;
@@ -605,7 +679,6 @@ class _FileListState extends State<FileList> {
                                                                 final relAdd = RegExp('(?<=$prefix/)(.*)\$')
                                                                     .firstMatch(i)!
                                                                     .group(1);
-                                                                print(relAdd);
                                                                 var symlinkRes = await http.put(
                                                                     Uri.parse(remoteUrl +
                                                                         '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
@@ -913,7 +986,7 @@ class _FileListState extends State<FileList> {
                                     Text("分享", style: TextStyle(color: Colors.white)),
                                   ],
                                 ))),
-                        Expanded(
+                        (widget.from!=null&&widget.from=="share")?Container():Expanded(
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () {
@@ -953,31 +1026,20 @@ class _FileListState extends State<FileList> {
                                     Text("收藏", style: TextStyle(color: Colors.white)),
                                   ],
                                 ))),
-                        Expanded(
+                        (widget.from!=null&&widget.from=="share")?Container():Expanded(
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                     side: BorderSide.none, primary: Color(0x2B196322), backgroundColor: Colors.red),
-                                onPressed: () {
+                                onPressed: () async{
                                   final chosenIDs = chosenMap.keys.toList();
-                                  http
-                                      .post(Uri.parse(baseURl + "/file/delete"),
-                                          headers: {
-                                            "Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}",
-                                          },
-                                          body: jsonEncode({"ids": chosenIDs}))
-                                      .then((value) {
-                                    dynamic data = jsonDecode(value.body);
-                                    if (data['data']['result'] == 'ok') {
-                                      print(111);
-                                      setState(() {
-                                        for (final item in chosenIDs) {
-                                          visitor.visitee.getChild(item).file.delete();
-                                        }
-                                        visitor = visitor.buildChildren(files);
-                                        chooseMode = false;
-                                        Navigator.pop(context);
-                                      });
+                                  var res=await http.delete(Uri.parse(remoteUrl+'/'+e.fileID));
+                                  setState(() {
+                                    for (final item in chosenIDs) {
+                                      visitor.visitee.getChild(item).file.delete();
                                     }
+                                    visitor = visitor.buildChildren(files);
+                                    chooseMode = false;
+                                    Navigator.pop(context);
                                   });
                                 },
                                 child: Column(
@@ -988,6 +1050,24 @@ class _FileListState extends State<FileList> {
                                       color: Colors.white,
                                     ),
                                     Text("删除", style: TextStyle(color: Colors.white)),
+                                  ],
+                                ))),
+                        Expanded(
+                            child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                    side: BorderSide.none, primary: Color(0x2B196322), backgroundColor: Colors.blue),
+                                onPressed: () {
+                                  //TODO: 转存
+                                  final chosenIDs = chosenMap.keys.toList();
+                                },
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.delete,
+                                      color: Colors.white,
+                                    ),
+                                    Text("转存", style: TextStyle(color: Colors.white)),
                                   ],
                                 ))),
                         // Expanded(child: OutlinedButton(
@@ -1024,10 +1104,8 @@ class _FileListState extends State<FileList> {
                 setState(() {
                   visitor = visitor.moveTo(e.fileID);
                   store.nowDir.add(e.fileName);
-                  print(store.nowDir);
 
                   if (!visitor.hasChild()) {
-                    print(112211);
                     http
                         .get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.nowDir.join('/')}/&delimiter=/"))
                         .then((res) {
@@ -1067,7 +1145,6 @@ class _FileListState extends State<FileList> {
                         if (json['ListBucketResult']['Contents'] != null) {
                           if (json['ListBucketResult']['Contents'] is! List) {
                             var ele = json['ListBucketResult']['Contents'];
-                            print(ele);
                             final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
                             files.add(File(
                               fileName: filename.last,
@@ -1078,7 +1155,6 @@ class _FileListState extends State<FileList> {
                               lastModifiedTime: DateTime.parse(ele['LastModified']),
                             ));
                           } else {
-                            print(json['ListBucketResult']['Contents']);
                             json['ListBucketResult']['Contents'].forEach((ele) {
                               if ((ele['Key'] as String).endsWith('/')) {
                                 return;
@@ -1137,7 +1213,7 @@ class _FileListState extends State<FileList> {
                                 ),
                                 Container(
                                   margin: const EdgeInsets.only(left: 10),
-                                  child: Text(e.fileType == "file" ? "${fileSize.toStringAsFixed(2)}$fileSizeExt" : "",
+                                  child: Text(e.fileType == "file" ? formatSize(fileSize) : "",
                                       style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                 )
                               ],

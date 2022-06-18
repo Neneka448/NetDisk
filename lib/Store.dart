@@ -22,15 +22,15 @@ class Store extends GetxController{
     File uploadManifest=File(doc.path+'/netdisk.upload.manifest');
     var dmio=await downloadManifest.open(mode: FileMode.write);
     var umio=await uploadManifest.open(mode: FileMode.write);
-    print(jsonEncode(uploadList.entries.toList().map((e){
-      return [e.key,e.value.toJson()];
-    }).toList()));
+
     await dmio.writeString(jsonEncode(downloadList.entries.toList().map((e){
           return [e.key,e.value.toJson()];
         }).toList()));
     await umio.writeString(jsonEncode(uploadList.entries.toList().map((e){
       return [e.key,e.value.toJson()];
     }).toList()));
+    await dmio.close();
+    await umio.close();
   }
   loadFromDisk()async{
     var doc=await getApplicationDocumentsDirectory();

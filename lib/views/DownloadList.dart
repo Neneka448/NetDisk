@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:open_file/open_file.dart';
+import '../DownloadIsolate.dart';
 import '../GlobalClass.dart';
 import '../Store.dart';
+import '../UploadIsolate.dart';
 
 class DownloadList extends StatefulWidget {
   const DownloadList({Key? key}) : super(key: key);
@@ -171,13 +173,33 @@ class _DownloadBoxState extends State<DownloadBox> {
                                   // TODO: Handle this case.
                                   break;
                                 case FileState.downloading:
-                                  // TODO: Handle this case.
+                                  p[index].value.isolate!.pause((){
+                                    store.downloadList[p[index].value.name]!.state=FileState.paused;
+                                    store.downloadList.refresh();
+                                  });
                                   break;
                                 case FileState.paused:
-                                  // TODO: Handle this case.
+                                  var t = DownloadIsolate(p[index].value.downloadUrl, startPos:store.downloadList[p[index].value.name]!.rec,size:store.downloadList[p[index].value.name]!.size);
+                                  p[index].value.isolate=t;
+                                  t.start(onInit_: (size) {
+                                    store.downloadList[p[index].value.name]!.startTime=DateTime.now().millisecondsSinceEpoch;
+                                    store.downloadList.refresh();
+                                  }, onProcess_: (ok, tot) {
+                                    if (store.downloadList[p[index].value.name]!.state != FileState.downloading) {
+                                      store.downloadList[p[index].value.name]!.state = FileState.downloading;
+                                    }
+                                    store.downloadList[p[index].value.name]!.rec = ok;
+                                    store.saveToDisk();
+                                    store.downloadList.refresh();
+                                  }, onDone_: (url) {
+                                    store.downloadList[p[index].value.name]!.state = FileState.done;
+                                    store.downloadList[p[index].value.name]!.url = url;
+                                    store.saveToDisk();
+                                    store.downloadList.refresh();
+                                  });
+                                  store.downloadList.refresh();
                                   break;
                                 case FileState.done:
-                                  print(p[index].value.url);
                                   var t=await OpenFile.open(p[index].value.url);
                                   break;
                               }
@@ -268,6 +290,38 @@ class _UploadBoxState extends State<UploadBox> {
                           child: IconButton(
                             onPressed: ()async{
                               store.saveToDisk();
+                              if(p[index].value.state==FileState.downloading){
+                                p[index].value.uploadIsolate!.pause((){
+                                  print(123456);
+                                  store.uploadList[p[index].value.name]!.state=FileState.paused;
+                                  store.uploadList.refresh();
+                                });
+                              }else if(p[index].value.state==FileState.paused){
+                                File newFile=File(p[index].value.downloadUrl);
+                                final filename=p[index].value.name;
+                                print(filename);
+                                var t = UploadIsolate(newFile,p[index].value.uploadSavePath ,
+                                    nowPart:store.uploadList[filename]!.nowPart,
+                                    startPos:store.uploadList[p[index].value.name]!.rec,
+                                    nowEtag:store.uploadList[filename]!.eTag );
+                                p[index].value.uploadIsolate=t;
+                                store.uploadList[filename]!.startTime=DateTime.now().millisecondsSinceEpoch;
+                                t.start(store.token.value,uploadID_: store.uploadList[filename]!.uploadID, onProcess: (ok, size,nextPart,etag) {
+                                  store.uploadList[filename]!.size = size;
+                                  store.uploadList[filename]!.rec = ok;
+                                  store.uploadList[filename]!.nowPart=nextPart;
+                                  store.uploadList[filename]!.eTag[nextPart-1]=etag;
+                                  store.uploadList[filename]!.state=FileState.downloading;
+                                  store.saveToDisk();
+                                  store.uploadList.refresh();
+                                }, onFinish: () {
+                                  store.uploadList[filename]!.state = FileState.done;
+                                  store.saveToDisk();
+                                  store.uploadList.refresh();
+                                });
+
+                                store.uploadList.refresh();
+                              }
                             },
                             icon: p[index].value.state==FileState.downloading
                                 ? Icon(Icons.pause)

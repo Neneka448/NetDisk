@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:netdisk/DownloadIsolate.dart';
 import 'package:netdisk/views/FileList.dart';
 import 'package:xml2json/xml2json.dart';
+
+import 'UploadIsolate.dart';
 
 class RawResponse<T>{
   final String status;
@@ -45,19 +48,19 @@ class SharedItemInfo{
 }
 
 String formatSize(double fileSize){
-  String fileSizeExt = "bit";
-  if (fileSize < 8 * 1024) {
-    fileSize /= 8;
+  String fileSizeExt = "B";
+  if (fileSize < 1024) {
+    fileSize /= 1024;
     fileSizeExt = "B";
-  } else if (fileSize < 8 * 1024 * 1024) {
+  } else if (fileSize < 1024 * 1024) {
     fileSizeExt = "KB";
-    fileSize /= 8 * 1024;
-  } else if (fileSize < 8 * 1024 * 1024 * 1024) {
+    fileSize /=  1024;
+  } else if (fileSize < 1024 * 1024 * 1024) {
     fileSizeExt = "MB";
-    fileSize /= 8 * 1024 * 1024;
+    fileSize /=  1024 * 1024;
   } else {
     fileSizeExt = "GB";
-    fileSize /= 8 * 1024 * 1024 * 1024;
+    fileSize /=  1024 * 1024 * 1024;
   }
 
   return fileSize.toStringAsFixed(2)+fileSizeExt;
@@ -104,7 +107,14 @@ class FileDescriptor{
   int startTime=1;
   String url="";
   FileState state=FileState.init;
-  FileDescriptor(this.name,this.downloadUrl,this.startTime);
+  int nowPart=1;
+  DownloadIsolate? isolate;
+  UploadIsolate? uploadIsolate;
+  List<String> uploadSavePath=<String>[];
+  Map<int,String>eTag={};
+  int flag;
+  String uploadID="";
+  FileDescriptor(this.name,this.downloadUrl,this.startTime,this.flag);
   toJson(){
     return {
       "name":name,
@@ -112,13 +122,27 @@ class FileDescriptor{
       "rec":rec,
       "size":size,
       "url":url,
+      "nowPart":nowPart,
+      "uploadSavePath":jsonEncode(uploadSavePath),
+      "flag":flag,
+      "eTag":jsonEncode(eTag.entries.map((e) => [e.key,e.value]).toList()),
+      "uploadID":uploadID
     };
   }
   factory FileDescriptor.fromJson(Map<String,dynamic>json){
-    var temp=FileDescriptor(json['name']!, json['downloadUrl']!, DateTime.now().millisecondsSinceEpoch);
+    var temp=FileDescriptor(json['name']!, json['downloadUrl']!, DateTime.now().millisecondsSinceEpoch,json["flag"]);
     temp.size=json['size']!;
     temp.rec=json['rec']!;
     temp.url=json['url'];
+    temp.nowPart=json['nowPart'];
+    jsonDecode(json['uploadSavePath']).forEach((e)=>temp.uploadSavePath.add(e));
+    temp.uploadID=json['uploadID'];
+    if(jsonDecode(json['eTag']).toList().length==0){
+      temp.eTag={};
+    }else{
+      temp.eTag={for (var p in jsonDecode(json['eTag']).toList()) p[0]:p[1]};
+
+    }
     if(temp.rec<temp.size){
       temp.state=FileState.paused;
     }else{
@@ -176,6 +200,15 @@ String dem2Hex(List<int> dem){
     int h0=i%16;
     int h1=i~/16;
     res+=map[h1]+map[h0];
+  }
+  return res;
+}
+
+List<int> hex2Dem(String hex){
+  const rmap={'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'A':10,'B':11,'C':12,'D':13,'E':14,'F':15};
+  var res=<int>[];
+  for(var i=1;i<hex.length;i+=2){
+    res.add(16*rmap[hex[i-1]]!+rmap[hex[i]]!);
   }
   return res;
 }

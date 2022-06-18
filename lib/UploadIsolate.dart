@@ -9,10 +9,15 @@ class UploadIsolate {
   late SendPort sender;
   late Isolate isolate;
   late String nowDir;
+  Function? onPaused;
+  bool isPaused=false;
+  int startPos=0;
+  int nowPart=1;
   File file;
-  Function(int sentChunk, int tot)? onProcess;
+  Function(int sentChunk, int tot,int nextPart,String eTag)? onProcess;
   Function? onFinish;
-  UploadIsolate(this.file,List<String> dir) {
+  Map<int,String> nowEtag;
+  UploadIsolate(this.file,List<String> dir,{this.startPos=0,this.nowPart=1,required this.nowEtag}) {
     nowDir=dir.join('/');
     port.listen((message) {
       String msg = message['msg'];
@@ -22,11 +27,15 @@ class UploadIsolate {
           sender.send({"msg": "ok", "data": file});
           break;
         case "shouldContinue":
-          sender.send({"msg":"ok"});
+          if(isPaused){
+            sender.send({"msg":"pause"});
+          }else{
+            sender.send({"msg":"ok"});
+          }
           break;
         case "process":
           if(onProcess!=null){
-            onProcess!(message['data']['ok'],message['data']['size']);
+            onProcess!(message['data']['ok'],message['data']['size'],message['data']['nextPart'],message['data']['eTag']);
           }
           break;
         case "uploadComplete":
@@ -34,25 +43,37 @@ class UploadIsolate {
             onFinish!();
           }
           break;
+        case "paused":
+          port.close();
+          if(onPaused!=null){
+            onPaused!();
+          }
       }
     });
   }
 
-  start(String id,{Function(int sentChunk, int tot)? onProcess,Function? onFinish}) async {
+  start(String id, {Function(String uploadID)? onInit,Function(int sentChunk, int tot,int nextPart,String eTag)? onProcess,Function? onFinish,String? uploadID_}) async {
     this.onProcess=onProcess;
     this.onFinish=onFinish;
     String uploadID;
     var filename = file.path
         .split(RegExp("/|\\\\"))
         .last;
-    print(filename+" 123");
-    var res = await http.post(Uri.parse(remoteUrl+"/passageOther/disk/$nowDir/$filename?uploads"));
-    print(res.body);
-    uploadID = RegExp("<UploadId>(.*)<\/UploadId>").firstMatch(res.body)!.group(1)!;
-    print(uploadID);
-    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename,"userid":id,"dir":nowDir});
+    if(uploadID_!=null){
+      uploadID=uploadID_;
+    }else{
+      var res = await http.post(Uri.parse(remoteUrl+"/passageOther/disk/$nowDir/$filename?uploads"));
+      uploadID = RegExp("<UploadId>(.*)<\/UploadId>").firstMatch(res.body)!.group(1)!;
+    }
+    if(onInit!=null){
+      onInit(uploadID);
+    }
+    isolate = await Isolate.spawn(uploadFunc, {"port":port.sendPort,"file":file,"id":uploadID,"filename":filename,"userid":id,"dir":nowDir,"startPos":startPos,"nowPart":nowPart,"etag":nowEtag});
   }
-
+  pause(Function? onPaused){
+    this.onPaused=onPaused;
+    isPaused=true;
+  }
 }
 
 uploadFunc(message) async {
@@ -66,11 +87,10 @@ uploadFunc(message) async {
   sendPort.send({"msg": "connect", "data": isoRecPort.sendPort});
   var fio = await file.open();
   var size = (await file.stat()).size;
-  print(size);
-  int nowPart = 1;
-  int start = 0;
+  int nowPart = message["nowPart"];
+  int start = message["startPos"];
   int chunkSize = 1024 * 100;
-  var check = {};
+  Map<int,String> check = message['etag'];
   isoRecPort.listen((message) async {
     String msg = message['msg'];
     switch (msg) {
@@ -78,22 +98,19 @@ uploadFunc(message) async {
         chunkSize=size-start<chunkSize?size-start:chunkSize;
         await fio.setPosition(start);
         var buffer=await fio.read(chunkSize);
-        print(start);
         if (start<size) {
           var res = await http.put(
               Uri.parse(remoteUrl+"/passageOther/disk/$dir/$filename?partNumber=$nowPart&uploadId=$uploadID"),
               body: buffer);
-          check[nowPart] = res.headers['etag'];
+          check[nowPart]=res.headers['etag']!;
           nowPart++;
-          print(111);
-          print("byteread$start");
           start += chunkSize;
-          print("code${res.statusCode}");
+          sendPort.send({"msg":"process","data":{"ok":start,"size":size,"nextPart":nowPart,"eTag":res.headers['etag']}});
           sendPort.send({"msg":"shouldContinue"});
-          sendPort.send({"msg":"process","data":{"ok":start,"size":size}});
+
         } else {
-          print(111);
           String checker = "";
+          //TODO: 保存checker
           checker = check.entries.toList().map((e) =>
           '''
               <Part>
@@ -102,15 +119,17 @@ uploadFunc(message) async {
               </Part>
               ''').join('\n');
           checker="<CompleteMultipartUpload>\n"+checker+"\n</CompleteMultipartUpload>";
-          print(checker);
+          print(remoteUrl+"/passageOther/disk/$dir/$filename?uploadId=$uploadID");
           var res = await http.post(
               Uri.parse(remoteUrl+"/passageOther/disk/$dir/$filename?uploadId=$uploadID"), body: checker);
-          print("complate${res.statusCode}");
+          print(res.statusCode);
           Isolate.exit(sendPort,{"msg":"uploadComplete"});
+
         }
+
         break;
-      case "":
-        break;
+      case "pause":
+        Isolate.exit(sendPort,{"msg":"paused"});
     }
   });
 }

@@ -18,7 +18,11 @@ class DownloadIsolate {
   late Function(int recChunk, int tot)? onProcess;
   late Function(int size)? onInit;
   late Function(String url) onDone;
-  DownloadIsolate(this.url) {
+  late Function? onPause;
+  int startPos=0;
+  int size=-1;
+  bool isPaused=false;
+  DownloadIsolate(this.url,{this.startPos=0,this.size=-1}) {
     fileName = url.split(RegExp("/|\\\\")).last;
     port.listen((message) async {
       String msg = message['msg'];
@@ -28,7 +32,11 @@ class DownloadIsolate {
           sender.send({"msg": "ok", "data": file});
           break;
         case "shouldContinue":
-          sender.send({"msg": "ok"});
+          if(isPaused){
+            sender.send({"msg":"pause"});
+          }else{
+            sender.send({"msg": "ok"});
+          }
           break;
         case "downloadFinished":
           var s=WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +48,6 @@ class DownloadIsolate {
           }else{
             onDone(file.path);
           }
-
-
           port.close();
           break;
         case "init":
@@ -52,6 +58,12 @@ class DownloadIsolate {
         case "process":
           if(onProcess!=null){
             onProcess!(message["data"]["rec"],message["data"]["size"]);
+          }
+          break;
+        case "paused":
+          port.close();
+          if(onPause!=null){
+            onPause!();
           }
           break;
       }
@@ -80,9 +92,12 @@ class DownloadIsolate {
       file=File(downloadDirectory.path+'/$fileName');
     }
     isolate = await Isolate.spawn(downloadFunc,
-        {"port": port.sendPort, "url": url, "file": file,"directory":downloadDirectory, "filename": fileName});
+        {"port": port.sendPort, "url": url, "file": file,"directory":downloadDirectory, "filename": fileName,"startPos":startPos,"startSize":size});
   }
-
+  pause(Function? onPaused){
+    onPause=onPaused;
+    isPaused=true;
+  }
 }
 
 downloadFunc(message)async {
@@ -92,13 +107,14 @@ downloadFunc(message)async {
   File file=message['file'];
   Directory dir=message['directory'];
   String filename=message['filename'];
+  int startPos=message['startPos'];
   sender.send({"msg":"connect","data":port.sendPort});
   var fio=await file.open(mode: FileMode.append);
   saveChunk(List<int> content)async{
     await fio.writeFrom(content);
   }
-  int size=-1;
-  int start=0;
+  int size=message['startSize'];
+  int start=startPos;
   int chunkSize=100*1024;
   port.listen((message) async {
     String msg=message["msg"];
@@ -138,7 +154,9 @@ downloadFunc(message)async {
 
         sender.send({"msg":"shouldContinue"});
         break;
-
+      case "pause":
+        port.close();
+        Isolate.exit(sender,{"msg":"paused"});
     }
   });
 
