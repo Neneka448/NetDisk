@@ -120,7 +120,7 @@ downloadFunc(message)async {
     String msg=message["msg"];
     switch(msg){
       case "ok":
-        fio.setPosition(start);
+        await fio.setPosition(start);
         if(start==0){
           int end=chunkSize;
           var res=await http.get(Uri.parse(url),headers: {
@@ -139,6 +139,8 @@ downloadFunc(message)async {
           if(start>=size){
             print("ok");
             port.close();
+            fio.flushSync();
+            fio.closeSync();
             Isolate.exit(sender,{"msg":"downloadFinished"});
           }
           var res=await http.get(Uri.parse(url),headers: {

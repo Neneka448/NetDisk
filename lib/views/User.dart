@@ -300,22 +300,22 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                    child: ClipRRect(
-                  borderRadius: BorderRadius.circular(26),
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                        side: BorderSide.none,
-                        backgroundColor: Color(0xFFECEBEB)),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/favorite');
-                    },
-                    child: const Text("收藏"),
-                  ),
-                )),
-                Divider(
-                  indent: 10,
-                ),
+                // Expanded(
+                //     child: ClipRRect(
+                //   borderRadius: BorderRadius.circular(26),
+                //   child: OutlinedButton(
+                //     style: OutlinedButton.styleFrom(
+                //         side: BorderSide.none,
+                //         backgroundColor: Color(0xFFECEBEB)),
+                //     onPressed: () {
+                //       Navigator.pushNamed(context, '/favorite');
+                //     },
+                //     child: const Text("收藏"),
+                //   ),
+                // )),
+                // Divider(
+                //   indent: 10,
+                // ),
                 Expanded(
                     child: ClipRRect(
                   borderRadius: BorderRadius.circular(26),

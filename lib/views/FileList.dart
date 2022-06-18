@@ -163,7 +163,8 @@ class FileList extends StatefulWidget {
   final Function onChangeNavi;
   final File? initFile;
   final String? from;
-  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile,this.from})
+  final Function refresh;
+  const FileList({Key? key, required this.backToParentCallback, required this.onChangeNavi, this.initFile,this.from, required this.refresh})
       : super(key: key);
 
   @override
@@ -186,9 +187,16 @@ class _FileListState extends State<FileList> {
       date: "-1",
       lastModifiedTime: DateTime.fromMillisecondsSinceEpoch(0)));
   late FileListTreeVisitor visitor = FileListTreeVisitor(fileTree);
-
+  void refresh() async{
+    setState(() {
+      files=[];
+      getFileListWhenInit();
+    });
+  }
   void getFileListWhenInit() async {
-    store.nowDir.value = [store.token.value];
+    if(widget.from!="share"){
+      store.nowDir.value = [store.token.value];
+    }
     if (widget.initFile != null) {
       final res = await http.get(Uri.parse(remoteUrl + "/?prefix=${widget.initFile!.fileID}&delimiter=/"));
       if (res.statusCode == 200) {
@@ -336,6 +344,7 @@ class _FileListState extends State<FileList> {
       final shares=await http.get(Uri.parse(remoteUrl + "/passageOther/share/user/${store.token.value}"));
       store.shareList.value=List<String>.from(jsonDecode(shares.body));
       store.shareList.refresh();
+
     }
   }
 
@@ -415,6 +424,7 @@ class _FileListState extends State<FileList> {
 
       }
     });
+    widget.refresh(refresh);
   }
 
   @override
@@ -536,7 +546,7 @@ class _FileListState extends State<FileList> {
                                                                 } else if (child.file.fileType == 'folder') {
                                                                   var fileRes = await http.get(Uri.parse(
                                                                       remoteUrl + '/?prefix=${child.file.fileID}'));
-                                                                  var files = getFileFromXML(fileRes.body);
+                                                                  var files = getFileFromXML(utf8.decode(fileRes.bodyBytes));
                                                                   for (var i in files) {
                                                                     if (i.fileID.endsWith('/') == false) {
                                                                       fileSet.add(i.fileID);
@@ -557,11 +567,11 @@ class _FileListState extends State<FileList> {
                                                                     .group(1);
                                                                 var symlinkRes = await http.put(
                                                                     Uri.parse(remoteUrl +
-                                                                        '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
-                                                                    headers: {"x-oss-symlink-target": i});
+                                                                        '/passageOther/share/files/$shareUuid/${Uri.encodeComponent(relAdd!)}?symlink'),
+                                                                    headers: {"x-oss-symlink-target": Uri.encodeComponent(i)});
                                                                 if (symlinkRes.statusCode == 200) {
                                                                   res.add(
-                                                                      'passageOther/share/${store.token.value}/$shareUuid/$relAdd');
+                                                                      'passageOther/share/${store.token.value}/$shareUuid/${Uri.encodeComponent(relAdd)}');
                                                                 }
                                                               }
                                                               final algo = crypto.AesCtr.with128bits(
@@ -986,53 +996,75 @@ class _FileListState extends State<FileList> {
                                     Text("分享", style: TextStyle(color: Colors.white)),
                                   ],
                                 ))),
-                        (widget.from!=null&&widget.from=="share")?Container():Expanded(
-                            child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
-                                onPressed: () {
-                                  final chosenIDs = chosenMap.keys.toList();
-                                  http
-                                      .post(Uri.parse(baseURl + '/favorite/add'),
-                                          headers: {
-                                            "Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                          },
-                                          body: jsonEncode({"ids": chosenIDs}))
-                                      .then((v) {
-                                    final data = jsonDecode(v.body)["data"]["result"];
-                                    setState(() {
-                                      Navigator.pop(context);
-                                      chooseMode = false;
-                                    });
-                                    if (data == 'ok') {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                        content: Text("收藏成功"),
-                                        duration: Duration(milliseconds: 500),
-                                      ));
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                        content: Text("收藏失败"),
-                                        duration: Duration(milliseconds: 500),
-                                      ));
-                                    }
-                                  });
-                                },
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.star_outlined,
-                                      color: Colors.white,
-                                    ),
-                                    Text("收藏", style: TextStyle(color: Colors.white)),
-                                  ],
-                                ))),
+                        // (widget.from!=null&&widget.from=="share")?Container():Expanded(
+                        //     child: OutlinedButton(
+                        //         style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
+                        //         onPressed: () {
+                        //           final chosenIDs = chosenMap.keys.toList();
+                        //           http
+                        //               .post(Uri.parse(baseURl + '/favorite/add'),
+                        //                   headers: {
+                        //                     "Authorization": "Basic ${base64Encode(utf8.encode(store.token.value))}"
+                        //                   },
+                        //                   body: jsonEncode({"ids": chosenIDs}))
+                        //               .then((v) {
+                        //             final data = jsonDecode(v.body)["data"]["result"];
+                        //             setState(() {
+                        //               Navigator.pop(context);
+                        //               chooseMode = false;
+                        //             });
+                        //             if (data == 'ok') {
+                        //               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        //                 content: Text("收藏成功"),
+                        //                 duration: Duration(milliseconds: 500),
+                        //               ));
+                        //             } else {
+                        //               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        //                 content: Text("收藏失败"),
+                        //                 duration: Duration(milliseconds: 500),
+                        //               ));
+                        //             }
+                        //           });
+                        //         },
+                        //         child: Column(
+                        //           mainAxisAlignment: MainAxisAlignment.center,
+                        //           children: [
+                        //             Icon(
+                        //               Icons.star_outlined,
+                        //               color: Colors.white,
+                        //             ),
+                        //             Text("收藏", style: TextStyle(color: Colors.white)),
+                        //           ],
+                        //         ))),
                         (widget.from!=null&&widget.from=="share")?Container():Expanded(
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                     side: BorderSide.none, primary: Color(0x2B196322), backgroundColor: Colors.red),
                                 onPressed: () async{
                                   final chosenIDs = chosenMap.keys.toList();
-                                  var res=await http.delete(Uri.parse(remoteUrl+'/'+e.fileID));
+                                  for(var i in chosenIDs){
+                                    var filename=i.split(RegExp(r'/|\\\\')).sublist(3).join("/");
+                                    print(i);
+                                    var file=visitor.visitee.getChild(i).file;
+                                    if(file.fileType=='folder'){
+                                      var res=await http.get(Uri.parse(remoteUrl+'/?prefix=${file.fileID}'));
+                                      var files=getFileFromXML(utf8.decode(res.bodyBytes));
+                                      for (var element in files) {
+                                        var filename=element.fileID.split(RegExp(r"/|\\\\")).sublist(3).join('/');
+                                        var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/recycle/${store.token.value}/'+filename),
+                                            headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(element.fileID)}'} );
+                                        if(resCopy.statusCode==200){
+                                          var res=await http.delete(Uri.parse(remoteUrl+'/'+Uri.encodeComponent(element.fileID)));
+                                        }
+                                      }
+                                    }else{
+                                      var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/recycle/${store.token.value}/'+filename),
+                                          headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(i)}'} );
+                                      if(resCopy.statusCode==200){
+                                        var res=await http.delete(Uri.parse(remoteUrl+'/'+Uri.encodeComponent(i)));
+                                      }
+                                    }
+                                  }
                                   setState(() {
                                     for (final item in chosenIDs) {
                                       visitor.visitee.getChild(item).file.delete();
@@ -1052,13 +1084,50 @@ class _FileListState extends State<FileList> {
                                     Text("删除", style: TextStyle(color: Colors.white)),
                                   ],
                                 ))),
-                        Expanded(
+                        (widget.from!=null&&widget.from=="share")?Expanded(
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                     side: BorderSide.none, primary: Color(0x2B196322), backgroundColor: Colors.blue),
-                                onPressed: () {
-                                  //TODO: 转存
+                                onPressed: () async{
                                   final chosenIDs = chosenMap.keys.toList();
+                                  print(1234);
+                                  print(store.nowDir);
+                                  for(var i in chosenIDs){
+                                    var filename=i.split(RegExp(r'/|\\\\')).last;
+                                    var fileID=i.split(RegExp(r'/|\\\\')).sublist(4).join('/');
+                                    var file=visitor.visitee.getChild(i).file;
+                                    if(file.fileType=='folder'){
+                                      var res=await http.get(Uri.parse(remoteUrl+'/?prefix=${file.fileID}'));
+                                      var files=getFileFromXML(utf8.decode(res.bodyBytes));
+                                      for (var element in files) {
+                                        var fileID=element.fileID.split(RegExp(r'/|\\\\')).sublist(4).join('/');
+                                        var isSymlink=await http.get(Uri.parse(remoteUrl+'/'+element.fileID+'?symlink'));
+                                        print(isSymlink.statusCode);
+                                        if(isSymlink.statusCode==200){
+                                          print(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink');
+                                          var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink'),
+                                              headers:{"x-oss-symlink-target":isSymlink.headers['x-oss-symlink-target']!});
+                                        }else{
+                                          var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID),
+                                              headers:{"x-oss-copy-source":'/img-passage/Uri.encodeComponent(element.fileID)'} );
+                                        }
+
+                                      }
+                                    }else{
+                                      var isSymlink=await http.get(Uri.parse(remoteUrl+'/'+i+'?symlink'));
+                                      print(isSymlink.statusCode);
+                                      print(5678);
+                                      if(isSymlink.statusCode==200){
+                                        var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink'),
+                                            headers:{"x-oss-symlink-target":Uri.decodeComponent(isSymlink.headers['x-oss-symlink-target']!)});
+                                      }else{
+                                        var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID),
+                                            headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(i)}'} );
+                                      }
+                                    }
+                                  }
+                                  Navigator.pop(context);
+                                  Navigator.pop(context);
                                 },
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1067,9 +1136,9 @@ class _FileListState extends State<FileList> {
                                       Icons.delete,
                                       color: Colors.white,
                                     ),
-                                    Text("转存", style: TextStyle(color: Colors.white)),
+                                    Text("转存到当前目录", style: TextStyle(color: Colors.white)),
                                   ],
-                                ))),
+                                ))):Container(),
                         // Expanded(child: OutlinedButton(
                         //     style: OutlinedButton.styleFrom(side: BorderSide.none,primary: Color(0x2B196322)),
                         //     onPressed: () {},
@@ -1112,7 +1181,7 @@ class _FileListState extends State<FileList> {
                       if (res.statusCode == 200) {
                         var transformer = Xml2Json();
                         files = [];
-                        transformer.parse(res.body);
+                        transformer.parse(utf8.decode(res.bodyBytes));
                         var json = jsonDecode(transformer.toParker());
                         if (json['ListBucketResult']['CommonPrefixes'] != null) {
                           if (json['ListBucketResult']['CommonPrefixes'] is! List) {

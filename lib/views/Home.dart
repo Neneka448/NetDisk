@@ -120,9 +120,12 @@ class _DiskAppState extends State<DiskApp> {
     }
     store.loadFromDisk();
   }
-
+  late Function refreshFile;
   void onBack(Function fn) {
     fileListGoBackCallBack = fn;
+  }
+  void refreshFileList(Function fn){
+    refreshFile=fn;
   }
 
   void onChangeNavi(Function fn) {
@@ -333,6 +336,7 @@ class _DiskAppState extends State<DiskApp> {
                                                           await http.put(Uri.parse(remoteUrl +
                                                               '/passageOther/disk/${store.nowDir.join("/")}/$newFolderName/'));
                                                           Navigator.pop(context);
+                                                          refreshFile();
                                                         },
                                                       ),
                                                     ),
@@ -446,6 +450,7 @@ class _DiskAppState extends State<DiskApp> {
                                                           Spacer(),
                                                           OutlinedButton(
                                                               onPressed: ()async {
+                                                                print(store.nowDir);
                                                                 var res=await http.get(Uri.parse(remoteUrl+'/passageOther/share/deCrypto/$shareLink'));
                                                                 if(res.statusCode==200){
                                                                   var secretBox=jsonDecode(res.body);
@@ -585,6 +590,7 @@ class _DiskAppState extends State<DiskApp> {
                   onChangeNavi: onChangeNavi,
                   initFile: widget.initFile,
                       from: widget.from,
+                      refresh:refreshFileList
                 )),
               ],
             )

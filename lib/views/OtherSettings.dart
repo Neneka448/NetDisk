@@ -71,24 +71,24 @@ class _UserInfoSettingsPageState extends State<OtherSettingsPage> {
               ),
             ),
           )),
-          Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(side: BorderSide.none),
-                onPressed: () {},
-                child: Container(
-                  padding: EdgeInsets.only(left: 10, right: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "下载目录设置",
-                        style: TextStyle(fontSize: 18, color: Colors.black),
-                      ),
-                      Text(" >", style: TextStyle(fontSize: 14, color: Colors.grey))
-                    ],
-                  ),
-                ),
-              )),
+          // Expanded(
+          //     child: OutlinedButton(
+          //       style: OutlinedButton.styleFrom(side: BorderSide.none),
+          //       onPressed: () {},
+          //       child: Container(
+          //         padding: EdgeInsets.only(left: 10, right: 10),
+          //         child: Row(
+          //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //           children: [
+          //             Text(
+          //               "下载目录设置",
+          //               style: TextStyle(fontSize: 18, color: Colors.black),
+          //             ),
+          //             Text(" >", style: TextStyle(fontSize: 14, color: Colors.grey))
+          //           ],
+          //         ),
+          //       ),
+          //     )),
           Expanded(
               child: OutlinedButton(
             style: OutlinedButton.styleFrom(side: BorderSide.none),
