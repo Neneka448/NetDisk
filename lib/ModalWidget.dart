@@ -66,16 +66,21 @@ Widget buildBottomSheetWidget(dynamic shared,BuildContext context,{Function? onD
               style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.red, side: BorderSide.none),
               onPressed: () async{
-                var res=await http.post(Uri.parse(baseURl+'/share/cancel'),headers: {
-                  "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                },body: jsonEncode({
-                  "id":shared.sharedId
-                }));
-                var result=jsonDecode(res.body)['data']['result'];
-                if(result=='ok'){
-                  if(onDelete!=null){
-                    onDelete();
-                  }
+                String source=shared['source'];
+                String crypted=shared['crypted'];
+                await http.delete(Uri.parse(remoteUrl+'/passageOther/share/deCrypto/'+crypted));
+                var res=await http.get(Uri.parse(remoteUrl+'/?prefix=passageOther/share/files/'+source+'/'));
+                var files=getFileFromXML(utf8.decode(res.bodyBytes));
+                for(var file in files){
+                  print(file.fileID);
+                  await http.delete(Uri.parse(remoteUrl+'/'+file.fileID));
+                }
+                await http.delete(Uri.parse(remoteUrl+'/passageOther/share/real/'+source));
+                store.shareList.remove(source);
+                await http.put(Uri.parse(remoteUrl+'/passageOther/share/user/${store.token.value}'),body: jsonEncode(store.shareList));
+                store.shareList.refresh();
+                if(onDelete!=null){
+                  onDelete();
                 }
               },
               child: Container(

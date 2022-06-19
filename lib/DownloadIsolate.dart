@@ -22,6 +22,7 @@ class DownloadIsolate {
   int startPos=0;
   int size=-1;
   bool isPaused=false;
+  int chunkSize=102400;
   DownloadIsolate(this.url,{this.startPos=0,this.size=-1}) {
     fileName = url.split(RegExp("/|\\\\")).last;
     port.listen((message) async {
@@ -35,7 +36,7 @@ class DownloadIsolate {
           if(isPaused){
             sender.send({"msg":"pause"});
           }else{
-            sender.send({"msg": "ok"});
+            sender.send({"msg": "ok","chunkSize":chunkSize});
           }
           break;
         case "downloadFinished":
@@ -69,7 +70,9 @@ class DownloadIsolate {
       }
     });
   }
-
+  changeSpeed(int newChunkSize){
+    chunkSize=newChunkSize;
+  }
   start({Function(int recChunk, int tot)? onProcess_,Function(int size)? onInit_,Function(String url)? onDone_}) async {
     if(onProcess_!=null){
       onProcess=onProcess_;
@@ -120,14 +123,25 @@ downloadFunc(message)async {
     String msg=message["msg"];
     switch(msg){
       case "ok":
+        if(message["chunkSize"]!=null&&message["chunkSize"]!=0){
+          chunkSize=message["chunkSize"];
+        }
         await fio.setPosition(start);
         if(start==0){
           int end=chunkSize;
           var res=await http.get(Uri.parse(url),headers: {
             "Range":"bytes=$start-$end"
           });
+          if(res.headers['content-range']==null){
+            await saveChunk(res.bodyBytes);
+            sender.send({"msg":"init","data":size});
+            sender.send({"msg":"process","data":{"rec":size,"size":size}});
+            port.close();
+            fio.flushSync();
+            fio.closeSync();
+            Isolate.exit(sender,{"msg":"downloadFinished"});
+          }
           size=int.parse(res.headers['content-range']!.split('/').last);
-          print(size);
           var bytesRead=int.parse(res.headers['content-length']!);
           print(res.statusCode);
           await saveChunk(res.bodyBytes);

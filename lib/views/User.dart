@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import '../GlobalVariables.dart' show baseURl, remoteUrl;
-import '../GlobalClass.dart' show RawResponse, Token, User;
+import '../GlobalClass.dart' show RawResponse, Token, User, formatSize;
 import '../Store.dart' show Store;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -44,6 +44,18 @@ class _UserPageState extends State<UserPage> {
 
           });
         }
+      });
+    }
+    if(store.token.value!=""){
+      http.get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.token.value}/")).then((res){
+        var size=0;
+        RegExp("<Size>(.*)</Size>").allMatches(res.body).toList().forEach((element) {
+          if(element.group(1)!=null){
+            size+=int.parse(element.group(1)!);
+          }
+        });
+        store.user.value.usedSpace=size;
+        store.user.refresh();
       });
     }
   }
@@ -278,7 +290,7 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
                       child: Obx(() => LinearProgressIndicator(
-                            value: store.user.value.usedSpace /
+                            value: store.user.value.usedSpace/1024/1024/1024 /
                                 store.user.value.maxSpace,
                             minHeight: 14,
                             valueColor:
@@ -288,7 +300,7 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                     )),
               ),
               Obx(() => Text(
-                    "${store.user.value.usedSpace}/${store.user.value.maxSpace}GB",
+                    "${formatSize(store.user.value.usedSpace*1.0)}/${store.user.value.maxSpace}GB",
                     textAlign: TextAlign.right,
                     style: TextStyle(color: Colors.grey),
                   ))
@@ -382,34 +394,34 @@ class _UserPageHasLoginState extends State<UserPageHasLogin> {
                         ),
                       ),
                     ),
-                    Container(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide.none,
-                        ),
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/settings/account');
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "安全中心",
-                              style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            const Text(
-                              "修改密码 >",
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 12),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
+                    // Container(
+                    //   width: double.infinity,
+                    //   child: OutlinedButton(
+                    //     style: OutlinedButton.styleFrom(
+                    //       side: BorderSide.none,
+                    //     ),
+                    //     onPressed: () {
+                    //       Navigator.pushNamed(context, '/settings/account');
+                    //     },
+                    //     child: Row(
+                    //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    //       children: [
+                    //         const Text(
+                    //           "安全中心",
+                    //           style: TextStyle(
+                    //               color: Colors.black,
+                    //               fontSize: 16,
+                    //               fontWeight: FontWeight.bold),
+                    //         ),
+                    //         const Text(
+                    //           "修改密码 >",
+                    //           style:
+                    //               TextStyle(color: Colors.grey, fontSize: 12),
+                    //         )
+                    //       ],
+                    //     ),
+                    //   ),
+                    // ),
                     Container(
                       width: double.infinity,
                       child: OutlinedButton(

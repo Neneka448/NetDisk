@@ -78,4 +78,14 @@ class Store extends GetxController{
       uploadManifest.deleteSync();
     }
   }
+  changeDownloadSpeed(int newSpeed){
+    downloadList.forEach((key, value) {
+      value.isolate!.changeSpeed(newSpeed);
+    });
+  }
+  changeUploadSpeed(int newSpeed){
+    uploadList.forEach((key, value) {
+      value.uploadIsolate!.changeSpeed(newSpeed);
+    });
+  }
 }

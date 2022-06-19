@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -61,16 +62,19 @@ class _UserInfoSettingsPageState extends State<UserInfoSettingsPage> {
                                   );
                                   if(res!=null){
                                     var t=res[0];
-                                    var formData=dio.FormData.fromMap({
-                                      "avatar":await dio.MultipartFile.fromFile(t.path,filename: t.path.split('/').last)
-                                    });
-                                    var response=await dio.Dio().post(baseURl+"/user/newavatar",data: formData,options: dio.Options(
-                                      headers: {"Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"}
-                                    ));
-                                    if(response.data['status']=='ok'){
+                                    store.user.value.avatar="https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/avatar/${store.token.value}/avatar.${t.path.split(RegExp("\.")).last}";
+                                    await http.put(Uri.parse(store.user.value.avatar),body: await File(t.path).readAsBytes());
+                                    var response=await http.put(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"),
+                                        body: jsonEncode({
+                                          "user_id":store.user.value.id,
+                                          "user_name":store.user.value.name,
+                                          "nickname":store.user.value.nickname,
+                                          "max_space":store.user.value.maxSpace,
+                                          "used_space":store.user.value.usedSpace,
+                                          "avatar":store.user.value.avatar
+                                        }));
+                                    if(response.statusCode==200){
                                       _setState((){
-                                        print(response.data['data']['url']);
-                                        store.user.value.avatar=response.data['data']['url'];
                                         store.user.refresh();
                                       });
                                       Navigator.pop(context);
@@ -86,22 +90,24 @@ class _UserInfoSettingsPageState extends State<UserInfoSettingsPage> {
                                   side: BorderSide.none,
                                 ),
                                 onPressed: ()async {
-                                  print(111);
-                                  var res= await ImagesPicker.pick(
+                                  var res= await ImagesPicker.openCamera(
                                       pickType: PickType.image
                                   );
                                   if(res!=null){
                                     var t=res[0];
-                                    var formData=dio.FormData.fromMap({
-                                      "avatar":await dio.MultipartFile.fromFile(t.path,filename: t.path.split('/').last)
-                                    });
-                                    var response=await dio.Dio().post(baseURl+"/user/newavatar",data: formData,options: dio.Options(
-                                        headers: {"Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"}
-                                    ));
-                                    if(response.data['status']=='ok'){
+                                    store.user.value.avatar="https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/avatar/${store.token.value}/avatar.${t.path.split(RegExp("\.")).last}";
+                                    await http.put(Uri.parse(store.user.value.avatar),body: await File(t.path).readAsBytes());
+                                    var response=await http.put(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"),
+                                        body: jsonEncode({
+                                          "user_id":store.user.value.id,
+                                          "user_name":store.user.value.name,
+                                          "nickname":store.user.value.nickname,
+                                          "max_space":store.user.value.maxSpace,
+                                          "used_space":store.user.value.usedSpace,
+                                          "avatar":store.user.value.avatar
+                                        }));
+                                    if(response.statusCode==200){
                                       _setState((){
-                                        print(response.data['data']['url']);
-                                        store.user.value.avatar=response.data['data']['url'];
                                         store.user.refresh();
                                       });
                                       Navigator.pop(context);
@@ -174,13 +180,18 @@ class _UserInfoSettingsPageState extends State<UserInfoSettingsPage> {
                                   setState((){
                                     newNickname=v;
                                   });
-                                  var res=await http.post(Uri.parse(baseURl+"/user/newname"),headers:{
-                                    "Authorization":"Basic ${base64Encode(utf8.encode(store.token.value))}"
-                                  });
-                                  if(jsonDecode(res.body)['data']['result']=='ok'){
-                                    store.user.value.nickname=newNickname;
-                                    store.user.refresh();
-                                  }
+                                  store.user.value.nickname=newNickname;
+                                  var res=await http.put(Uri.parse("https://img-passage.oss-cn-hangzhou.aliyuncs.com/passageOther/user/${store.token.value}"),
+                                      body: jsonEncode({
+                                        "user_id":store.user.value.id,
+                                        "user_name":store.user.value.name,
+                                        "nickname":store.user.value.nickname,
+                                        "max_space":1024,
+                                        "used_space":0,
+                                        "avatar":store.user.value.avatar
+                                      }));
+                                  store.user.refresh();
+
                                   Navigator.pop(context);
                                 },
                               ),

@@ -342,8 +342,10 @@ class _FileListState extends State<FileList> {
         });
       }
       final shares=await http.get(Uri.parse(remoteUrl + "/passageOther/share/user/${store.token.value}"));
-      store.shareList.value=List<String>.from(jsonDecode(shares.body));
-      store.shareList.refresh();
+      if(shares.statusCode==200){
+        store.shareList.value=List<String>.from(jsonDecode(shares.body));
+        store.shareList.refresh();
+      }
 
     }
   }
@@ -457,27 +459,30 @@ class _FileListState extends State<FileList> {
                             child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: BorderSide.none, primary: Color(0x2B196322)),
                                 onPressed: () async {
-                                  final url = remoteUrl + '/' + e.fileID;
-                                  var t = DownloadIsolate(url);
-                                  t.start(onInit_: (size) {
-                                    store.downloadList[e.fileName] =
-                                        FileDescriptor(e.fileName, url, DateTime.now().millisecondsSinceEpoch,0);
-                                    store.downloadList[e.fileName]!.size = size;
-                                    store.downloadList[e.fileName]!.isolate=t;
-                                    store.downloadList.refresh();
-                                  }, onProcess_: (ok, tot) {
-                                    if (store.downloadList[e.fileName]!.state != FileState.downloading) {
-                                      store.downloadList[e.fileName]!.state = FileState.downloading;
-                                    }
-                                    store.downloadList[e.fileName]!.rec = ok;
-                                    store.saveToDisk();
-                                    store.downloadList.refresh();
-                                  }, onDone_: (url) {
-                                    store.downloadList[e.fileName]!.state = FileState.done;
-                                    store.downloadList[e.fileName]!.url = url;
-                                    store.saveToDisk();
-                                    store.downloadList.refresh();
+                                  chosenMap.forEach((key, value) {
+                                    final url = remoteUrl + '/' + key;
+                                    var t = DownloadIsolate(url);
+                                    t.start(onInit_: (size) {
+                                      store.downloadList[key] =
+                                          FileDescriptor(key, url, DateTime.now().millisecondsSinceEpoch,0);
+                                      store.downloadList[key]!.size = size;
+                                      store.downloadList[key]!.isolate=t;
+                                      store.downloadList.refresh();
+                                    }, onProcess_: (ok, tot) {
+                                      if (store.downloadList[key]!.state != FileState.downloading) {
+                                        store.downloadList[key]!.state = FileState.downloading;
+                                      }
+                                      store.downloadList[key]!.rec = ok;
+                                      store.saveToDisk();
+                                      store.downloadList.refresh();
+                                    }, onDone_: (url) {
+                                      store.downloadList[key]!.state = FileState.done;
+                                      store.downloadList[key]!.url = url;
+                                      store.saveToDisk();
+                                      store.downloadList.refresh();
+                                    });
                                   });
+
                                 },
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -565,11 +570,11 @@ class _FileListState extends State<FileList> {
                                                                 final relAdd = RegExp('(?<=$prefix/)(.*)\$')
                                                                     .firstMatch(i)!
                                                                     .group(1);
-                                                                var symlinkRes = await http.put(
+                                                                var copyRes = await http.put(
                                                                     Uri.parse(remoteUrl +
-                                                                        '/passageOther/share/files/$shareUuid/${Uri.encodeComponent(relAdd!)}?symlink'),
-                                                                    headers: {"x-oss-symlink-target": Uri.encodeComponent(i)});
-                                                                if (symlinkRes.statusCode == 200) {
+                                                                        '/passageOther/share/files/$shareUuid/${Uri.encodeComponent(relAdd!)}'),
+                                                                    headers: {"x-oss-copy-source": '/img-passage/'+Uri.encodeComponent(i)});
+                                                                if (copyRes.statusCode == 200) {
                                                                   res.add(
                                                                       'passageOther/share/${store.token.value}/$shareUuid/${Uri.encodeComponent(relAdd)}');
                                                                 }
@@ -689,13 +694,13 @@ class _FileListState extends State<FileList> {
                                                                 final relAdd = RegExp('(?<=$prefix/)(.*)\$')
                                                                     .firstMatch(i)!
                                                                     .group(1);
-                                                                var symlinkRes = await http.put(
+                                                                var copyRes = await http.put(
                                                                     Uri.parse(remoteUrl +
-                                                                        '/passageOther/share/files/$shareUuid/$relAdd?symlink'),
-                                                                    headers: {"x-oss-symlink-target": i});
-                                                                if (symlinkRes.statusCode == 200) {
+                                                                        '/passageOther/share/files/$shareUuid/${Uri.encodeComponent(relAdd!)}'),
+                                                                    headers: {"x-oss-copy-source": i});
+                                                                if (copyRes.statusCode == 200) {
                                                                   res.add(
-                                                                      'passageOther/share/${store.token.value}/$shareUuid/$relAdd');
+                                                                      'passageOther/share/${store.token.value}/$shareUuid/${Uri.encodeComponent(relAdd)}');
                                                                 }
                                                               }
                                                               final algo = crypto.AesCtr.with128bits(
@@ -1100,30 +1105,17 @@ class _FileListState extends State<FileList> {
                                       var res=await http.get(Uri.parse(remoteUrl+'/?prefix=${file.fileID}'));
                                       var files=getFileFromXML(utf8.decode(res.bodyBytes));
                                       for (var element in files) {
-                                        var fileID=element.fileID.split(RegExp(r'/|\\\\')).sublist(4).join('/');
-                                        var isSymlink=await http.get(Uri.parse(remoteUrl+'/'+element.fileID+'?symlink'));
-                                        print(isSymlink.statusCode);
-                                        if(isSymlink.statusCode==200){
-                                          print(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink');
-                                          var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink'),
-                                              headers:{"x-oss-symlink-target":isSymlink.headers['x-oss-symlink-target']!});
-                                        }else{
+                                        if(element.fileType!='folder'){
+                                          var fileID=element.fileID.split(RegExp(r'/|\\\\')).sublist(4).join('/');
+                                          print('/img-passage/${Uri.encodeComponent(fileID).replaceAll("%2F", "/")}');
                                           var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID),
-                                              headers:{"x-oss-copy-source":'/img-passage/Uri.encodeComponent(element.fileID)'} );
+                                              headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(element.fileID).replaceAll("%2F", "/")}'} );
+                                          print(resCopy.statusCode);
                                         }
-
                                       }
                                     }else{
-                                      var isSymlink=await http.get(Uri.parse(remoteUrl+'/'+i+'?symlink'));
-                                      print(isSymlink.statusCode);
-                                      print(5678);
-                                      if(isSymlink.statusCode==200){
-                                        var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID+'?symlink'),
-                                            headers:{"x-oss-symlink-target":Uri.decodeComponent(isSymlink.headers['x-oss-symlink-target']!)});
-                                      }else{
-                                        var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID),
-                                            headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(i)}'} );
-                                      }
+                                      var resCopy=await http.put(Uri.parse(remoteUrl+'/passageOther/disk/${store.nowDir.join('/')}/'+fileID),
+                                          headers:{"x-oss-copy-source":'/img-passage/${Uri.encodeComponent(i)}'} );
                                     }
                                   }
                                   Navigator.pop(context);
@@ -1175,9 +1167,19 @@ class _FileListState extends State<FileList> {
                   store.nowDir.add(e.fileName);
 
                   if (!visitor.hasChild()) {
-                    http
-                        .get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.nowDir.join('/')}/&delimiter=/"))
-                        .then((res) {
+                    print(e.fileID);
+                    Future res;
+                    if(widget.from=='share'){
+                      var fileID=e.fileID.split(RegExp('/|\\\\')).sublist(2).join('/');
+                      print(remoteUrl + "/?prefix=passageOther/share/$fileID/&delimiter=/");
+                      res=http
+                          .get(Uri.parse(remoteUrl + "/?prefix=passageOther/share/$fileID&delimiter=/"));
+                    }else{
+                      res=http
+                          .get(Uri.parse(remoteUrl + "/?prefix=passageOther/disk/${store.nowDir.join('/')}/&delimiter=/"));
+                    }
+
+                        res.then((res) {
                       if (res.statusCode == 200) {
                         var transformer = Xml2Json();
                         files = [];
@@ -1214,17 +1216,22 @@ class _FileListState extends State<FileList> {
                         if (json['ListBucketResult']['Contents'] != null) {
                           if (json['ListBucketResult']['Contents'] is! List) {
                             var ele = json['ListBucketResult']['Contents'];
-                            final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
-                            files.add(File(
-                              fileName: filename.last,
-                              fileID: ele['Key'],
-                              fileSize: ele['Size'],
-                              date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
-                              fileType: 'file',
-                              lastModifiedTime: DateTime.parse(ele['LastModified']),
-                            ));
+                            if(ele['Size']!='0'){
+                              final filename = ele['Key'].replaceAll(RegExp(r"/$"), "").split('/');
+                              files.add(File(
+                                fileName: filename.last,
+                                fileID: ele['Key'],
+                                fileSize: ele['Size'],
+                                date: DateTime.parse(ele['LastModified']).millisecondsSinceEpoch.toString(),
+                                fileType: 'file',
+                                lastModifiedTime: DateTime.parse(ele['LastModified']),
+                              ));
+                            }
                           } else {
                             json['ListBucketResult']['Contents'].forEach((ele) {
+                              if(ele['Size']==0){
+                                return;
+                              }
                               if ((ele['Key'] as String).endsWith('/')) {
                                 return;
                               }

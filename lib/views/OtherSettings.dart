@@ -12,6 +12,8 @@ class OtherSettingsPage extends StatefulWidget {
 }
 
 class _UserInfoSettingsPageState extends State<OtherSettingsPage> {
+  int newDownloadSpeed=102400;
+  int newUploadSpeed=102400;
   @override
   Widget build(BuildContext context) {
     final Store store = Get.find();
@@ -38,7 +40,36 @@ class _UserInfoSettingsPageState extends State<OtherSettingsPage> {
           Expanded(
               child: OutlinedButton(
             style: OutlinedButton.styleFrom(side: BorderSide.none),
-            onPressed: () {},
+            onPressed: () {
+              showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) {
+                    return StatefulBuilder(builder: (context, setState) {
+                      return AnimatedPadding(
+                        padding:
+                        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                        duration: Duration.zero,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(10), topRight: Radius.circular(10)),
+                          child: Container(
+                            constraints: BoxConstraints(maxHeight: 100),
+                            child: TextField(
+                              decoration: InputDecoration(
+                                  hintText: "请输入下载块大小",
+                                  filled: true,
+                                  fillColor: Colors.white),
+                              onSubmitted: (v) async {
+                                newDownloadSpeed=int.parse(v);
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    });
+                  });
+            },
             child: Container(
               padding: EdgeInsets.only(left: 10, right: 10),
               child: Row(
@@ -56,7 +87,38 @@ class _UserInfoSettingsPageState extends State<OtherSettingsPage> {
           Expanded(
               child: OutlinedButton(
             style: OutlinedButton.styleFrom(side: BorderSide.none),
-            onPressed: () {},
+            onPressed: () {
+              showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) {
+                    return StatefulBuilder(builder: (context, setState) {
+                      return AnimatedPadding(
+                        padding:
+                        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                        duration: Duration.zero,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(10), topRight: Radius.circular(10)),
+                          child: Container(
+                            constraints: BoxConstraints(maxHeight: 100),
+                            child: TextField(
+                              decoration: InputDecoration(
+                                  hintText: "请输入上传块大小",
+                                  filled: true,
+                                  fillColor: Colors.white),
+                              onSubmitted: (v) async {
+                                newUploadSpeed=int.parse(v);
+
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    });
+                  });
+
+            },
             child: Container(
               padding: EdgeInsets.only(left: 10, right: 10),
               child: Row(

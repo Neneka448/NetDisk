@@ -17,6 +17,7 @@ class UploadIsolate {
   Function(int sentChunk, int tot,int nextPart,String eTag)? onProcess;
   Function? onFinish;
   Map<int,String> nowEtag;
+  int chunkSize=102400;
   UploadIsolate(this.file,List<String> dir,{this.startPos=0,this.nowPart=1,required this.nowEtag}) {
     nowDir=dir.join('/');
     port.listen((message) {
@@ -30,7 +31,7 @@ class UploadIsolate {
           if(isPaused){
             sender.send({"msg":"pause"});
           }else{
-            sender.send({"msg":"ok"});
+            sender.send({"msg":"ok","chunkSize":chunkSize});
           }
           break;
         case "process":
@@ -51,7 +52,9 @@ class UploadIsolate {
       }
     });
   }
-
+  changeSpeed(int newChunkSize){
+    chunkSize=newChunkSize;
+  }
   start(String id, {Function(String uploadID)? onInit,Function(int sentChunk, int tot,int nextPart,String eTag)? onProcess,Function? onFinish,String? uploadID_}) async {
     this.onProcess=onProcess;
     this.onFinish=onFinish;
@@ -95,6 +98,9 @@ uploadFunc(message) async {
     String msg = message['msg'];
     switch (msg) {
       case "ok":
+        if(message['chunkSize']!=null){
+          chunkSize=message['chunkSize'];
+        }
         chunkSize=size-start<chunkSize?size-start:chunkSize;
         await fio.setPosition(start);
         var buffer=await fio.read(chunkSize);
